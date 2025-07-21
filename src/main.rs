@@ -153,16 +153,18 @@ async fn kv<Backend>(
 ) -> Result<ExitCode, Box<dyn std::error::Error>>
 where
     Backend: KvBackend<GetStream: Send, SetStream: Send, DeleteStream: Send, Error: IntoTonicStatus>
-        + buffdb::transaction::TransactionalBackend + 'static,
+        + buffdb::transaction::TransactionalBackend
+        + 'static,
     Backend::Error: std::fmt::Display + std::fmt::Debug,
 {
     let mut client = transitive::kv_client::<_, Backend>(store).await?;
     match command {
         cli::KvCommand::Get { keys } => {
             let mut values = client
-                .get(stream::iter(
-                    keys.into_iter().map(|key| kv::GetRequest { key, transaction_id: None }),
-                ))
+                .get(stream::iter(keys.into_iter().map(|key| kv::GetRequest {
+                    key,
+                    transaction_id: None,
+                })))
                 .await?
                 .into_inner();
 
@@ -178,12 +180,19 @@ where
         }
         cli::KvCommand::Set { key, value } => {
             let _response = client
-                .set(stream::iter([kv::SetRequest { key, value, transaction_id: None }]))
+                .set(stream::iter([kv::SetRequest {
+                    key,
+                    value,
+                    transaction_id: None,
+                }]))
                 .await?;
         }
         cli::KvCommand::Delete { key } => {
             let _response = client
-                .delete(stream::iter([kv::DeleteRequest { key, transaction_id: None }]))
+                .delete(stream::iter([kv::DeleteRequest {
+                    key,
+                    transaction_id: None,
+                }]))
                 .await?;
         }
         cli::KvCommand::Eq { keys } => {
@@ -234,14 +243,18 @@ where
             UpdateStream: Send,
             DeleteStream: Send,
             Error: IntoTonicStatus,
-        > + buffdb::transaction::TransactionalBackend + 'static,
-        Backend::Error: std::fmt::Display + std::fmt::Debug,
+        > + buffdb::transaction::TransactionalBackend
+        + 'static,
+    Backend::Error: std::fmt::Display + std::fmt::Debug,
 {
     let mut client = transitive::blob_client::<_, Backend>(store.clone()).await?;
     match command {
         cli::BlobCommand::Get { id, mode } => {
             let blob: Vec<_> = client
-                .get(stream::iter([blob::GetRequest { id, transaction_id: None }]))
+                .get(stream::iter([blob::GetRequest {
+                    id,
+                    transaction_id: None,
+                }]))
                 .await?
                 .into_inner()
                 .collect()
@@ -341,7 +354,10 @@ where
         }
         cli::BlobCommand::Delete { id } => {
             let _response = client
-                .delete(stream::iter([blob::DeleteRequest { id, transaction_id: None }]))
+                .delete(stream::iter([blob::DeleteRequest {
+                    id,
+                    transaction_id: None,
+                }]))
                 .await?;
         }
         cli::BlobCommand::EqData { ids } => {

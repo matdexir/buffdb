@@ -30,7 +30,7 @@ mod duckdb_helper;
 pub mod fts;
 pub mod index;
 pub mod interop;
-// pub mod json_store; // Temporarily disabled - needs refactoring
+pub mod json_store;
 mod kv;
 mod location;
 pub mod mvcc;

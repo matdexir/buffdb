@@ -145,7 +145,11 @@ impl KvBackend for Sqlite {
         let mut stream = request.into_inner();
         let db = self.connect_kv().map_err(into_tonic_status)?;
         let stream = stream!({
-            while let Some(kv::GetRequest { key, transaction_id: _ }) = stream.message().await? {
+            while let Some(kv::GetRequest {
+                key,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 let value = db
                     .query_row("SELECT value FROM kv WHERE key = ?", [&key], |row| {
                         row.get(0)
@@ -163,7 +167,12 @@ impl KvBackend for Sqlite {
         let mut stream = request.into_inner();
         let db = self.connect_kv().map_err(into_tonic_status)?;
         let stream = stream!({
-            while let Some(kv::SetRequest { key, value, transaction_id: _ }) = stream.message().await? {
+            while let Some(kv::SetRequest {
+                key,
+                value,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 db.execute(
                     "INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)",
                     [&key, &value],
@@ -184,7 +193,11 @@ impl KvBackend for Sqlite {
         let mut stream = request.into_inner();
         let db = self.connect_kv().map_err(into_tonic_status)?;
         let stream = stream!({
-            while let Some(kv::DeleteRequest { key, transaction_id: _ }) = stream.message().await? {
+            while let Some(kv::DeleteRequest {
+                key,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 db.execute("DELETE FROM kv WHERE key = ?", [&key])
                     .map_err(into_tonic_status)?;
                 yield Ok(kv::DeleteResponse { key });
@@ -268,7 +281,11 @@ impl BlobBackend for Sqlite {
         let db = self.connect_blob().map_err(into_tonic_status)?;
 
         let stream = stream!({
-            while let Some(blob::GetRequest { id, transaction_id: _ }) = stream.message().await? {
+            while let Some(blob::GetRequest {
+                id,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 let (data, metadata) = db
                     .query_row(
                         "SELECT data, metadata FROM blob WHERE rowid = ?",
@@ -300,7 +317,12 @@ impl BlobBackend for Sqlite {
         let db = self.connect_blob().map_err(into_tonic_status)?;
 
         let stream = stream!({
-            while let Some(blob::StoreRequest { bytes, metadata, transaction_id: _ }) = stream.message().await? {
+            while let Some(blob::StoreRequest {
+                bytes,
+                metadata,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 let id = db
                     .query_row(
                         "INSERT INTO blob(data, metadata) VALUES(?, ?) RETURNING rowid",
@@ -368,7 +390,11 @@ impl BlobBackend for Sqlite {
         let mut stream = request.into_inner();
         let db = self.connect_blob().map_err(into_tonic_status)?;
         let stream = stream!({
-            while let Some(blob::DeleteRequest { id, transaction_id: _ }) = stream.message().await? {
+            while let Some(blob::DeleteRequest {
+                id,
+                transaction_id: _,
+            }) = stream.message().await?
+            {
                 db.execute("DELETE FROM blob WHERE rowid = ?", [id])
                     .map_err(into_tonic_status)?;
                 yield Ok(blob::DeleteResponse { id });
