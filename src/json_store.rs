@@ -2,20 +2,24 @@
 //!
 //! This module provides a document-oriented storage layer on top of BuffDB's
 //! key-value store, with support for JSONPath queries and partial updates.
+//!
+//! TODO: The json_store module needs to be refactored to work properly with the
+//! streaming API. The current implementation is temporarily disabled as it requires
+//! adapting between streaming and non-streaming interfaces, which is complex due
+//! to the nature of tonic::Streaming being created by the gRPC framework.
+//!
+//! Possible solutions:
+//! 1. Use the transitive client approach to create a proper gRPC client connection
+//! 2. Implement a non-streaming backend specifically for internal use
+//! 3. Refactor the entire module to work with streaming natively
 
 use crate::backend::{DatabaseBackend, KvBackend};
-use crate::fts::{FtsManager, Tokenizer};
-use crate::index::{IndexConfig, IndexManager, IndexType, IndexValue};
+use crate::fts::FtsManager;
+use crate::index::{IndexConfig, IndexManager, IndexType};
 use crate::interop::IntoTonicStatus;
-use crate::transaction::{TransactionManager, TransactionalBackend};
-use crate::{Location, RpcResponse, StreamingRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
-use futures::StreamExt;
-use std::path::PathBuf;
 use std::sync::Arc;
-use tonic::Status;
 
 /// JSON document store errors
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +45,9 @@ pub enum JsonStoreError {
 
     #[error("Backend error: {0}")]
     BackendError(String),
+
+    #[error("Not implemented: json_store module needs refactoring for streaming API")]
+    NotImplemented,
 }
 
 /// JSON document metadata
@@ -61,35 +68,25 @@ pub struct JsonDocument {
     pub data: Value,
 }
 
-/// JSON document store
-pub struct JsonStore<Backend: TransactionalBackend> {
-    backend: Backend,
-    transaction_manager: Option<Arc<TransactionManager<Backend>>>,
+/// JSON document store - temporarily disabled
+///
+/// This struct is kept for API compatibility but all methods return NotImplemented error
+pub struct JsonStore<Backend> {
+    _backend: std::marker::PhantomData<Backend>,
     index_manager: Arc<IndexManager>,
     fts_manager: Arc<FtsManager>,
-    /// Collection name to prefix for keys
     collection: String,
 }
 
-impl<Backend> JsonStore<Backend>
-where
-    Backend: DatabaseBackend + KvBackend + TransactionalBackend,
-    Backend::Error: std::fmt::Display,
-{
+impl<Backend> JsonStore<Backend> {
     /// Create a new JSON document store
-    pub fn new(backend: Backend, collection: String) -> Self {
+    pub fn new(_backend: Backend, collection: String) -> Self {
         Self {
-            backend,
-            transaction_manager: None,
+            _backend: std::marker::PhantomData,
             index_manager: Arc::new(IndexManager::new()),
             fts_manager: Arc::new(FtsManager::new()),
             collection,
         }
-    }
-
-    /// Create a new JSON document store at the given location
-    pub fn at_location(location: Location, collection: String) -> Result<Self, Backend::Error> {
-        Ok(Self::new(Backend::at_location(location)?, collection))
     }
 
     /// Create a JSON path index
@@ -227,7 +224,7 @@ impl JsonPath {
                 if !current.is_object() {
                     *current = Value::Object(Map::new());
                 }
-                
+
                 // Ensure field exists and is an array
                 {
                     let obj = current.as_object_mut().unwrap();
@@ -235,20 +232,26 @@ impl JsonPath {
                         obj.insert(field.to_string(), Value::Array(Vec::new()));
                     }
                 }
-                
+
                 // Now work with the array
                 {
                     let obj = current.as_object_mut().unwrap();
                     let arr = obj.get_mut(field).unwrap().as_array_mut().unwrap();
-                    
+
                     // Extend array if needed
                     while arr.len() <= index {
                         arr.push(Value::Null);
                     }
                 }
-                
+
                 // Move to the array element
-                current = current.get_mut(field).unwrap().as_array_mut().unwrap().get_mut(index).unwrap();
+                current = current
+                    .get_mut(field)
+                    .unwrap()
+                    .as_array_mut()
+                    .unwrap()
+                    .get_mut(index)
+                    .unwrap();
             } else {
                 // Object field access
                 if !current.is_object() {
@@ -274,7 +277,7 @@ impl JsonPath {
             if !current.is_object() {
                 *current = Value::Object(Map::new());
             }
-            
+
             // Ensure field exists and is an array
             {
                 let obj = current.as_object_mut().unwrap();
@@ -282,11 +285,11 @@ impl JsonPath {
                     obj.insert(field.to_string(), Value::Array(Vec::new()));
                 }
             }
-            
+
             // Set the value in the array
             let obj = current.as_object_mut().unwrap();
             let arr = obj.get_mut(field).unwrap().as_array_mut().unwrap();
-            
+
             // Extend array if needed
             while arr.len() <= index {
                 arr.push(Value::Null);
@@ -306,262 +309,50 @@ impl JsonPath {
     }
 }
 
-// Helper to create a streaming request from a single item
-fn single_item_stream<T>(item: T) -> impl futures::Stream<Item = Result<T, tonic::Status>> 
-where
-    T: Send + 'static,
-{
-    futures::stream::once(async move { Ok(item) })
-}
-
-// Document store operations
-impl<Backend> JsonStore<Backend>
-where
-    Backend: KvBackend<Error: IntoTonicStatus> + TransactionalBackend + 'static,
-    Backend::Error: std::fmt::Display,
-{
+// Document store operations - temporarily return NotImplemented
+impl<Backend> JsonStore<Backend> {
     /// Insert a new document
     pub async fn insert(
         &self,
-        id: String,
-        data: Value,
-        schema: Option<String>,
+        _id: String,
+        _data: Value,
+        _schema: Option<String>,
     ) -> Result<JsonDocument, JsonStoreError> {
-        let now = chrono::Utc::now();
-
-        let metadata = DocumentMetadata {
-            id: id.clone(),
-            created_at: now,
-            updated_at: now,
-            version: 1,
-            schema,
-        };
-
-        let document = JsonDocument {
-            metadata: metadata.clone(),
-            data: data.clone(),
-        };
-
-        // Store document
-        let doc_key = self.doc_key(&id);
-        let doc_value = serde_json::to_string(&data)?;
-
-        let set_request = tokio_stream::iter(
-            vec![crate::proto::kv::SetRequest {
-                key: doc_key,
-                value: doc_value,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .set(tonic::Request::new(set_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        // Store metadata
-        let meta_key = self.meta_key(&id);
-        let meta_value = serde_json::to_string(&metadata)?;
-
-        let meta_request = tokio_stream::iter(
-            vec![crate::proto::kv::SetRequest {
-                key: meta_key,
-                value: meta_value,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .set(tonic::Request::new(meta_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        // Update indexes
-        self.update_indexes(&id, None, &data)?;
-
-        Ok(document)
+        Err(JsonStoreError::NotImplemented)
     }
 
     /// Get a document by ID
-    pub async fn get(&self, id: &str) -> Result<JsonDocument, JsonStoreError> {
-        // Get document data
-        let doc_key = self.doc_key(id);
-        let get_request = tokio_stream::iter(
-            vec![crate::proto::kv::GetRequest {
-                key: doc_key,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        let mut response = self
-            .backend
-            .get(tonic::Request::new(get_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?
-            .into_inner();
-
-        let doc_value = if let Some(Ok(resp)) = response.message().await {
-            resp.value
-        } else {
-            return Err(JsonStoreError::DocumentNotFound { id: id.to_string() });
-        };
-
-        let data: Value = serde_json::from_str(&doc_value)?;
-
-        // Get metadata
-        let meta_key = self.meta_key(id);
-        let meta_request = tokio_stream::iter(
-            vec![crate::proto::kv::GetRequest {
-                key: meta_key,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        let mut meta_response = self
-            .backend
-            .get(tonic::Request::new(meta_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?
-            .into_inner();
-
-        let meta_value = if let Some(Ok(resp)) = meta_response.message().await {
-            resp.value
-        } else {
-            return Err(JsonStoreError::DocumentNotFound { id: id.to_string() });
-        };
-
-        let metadata: DocumentMetadata = serde_json::from_str(&meta_value)?;
-
-        Ok(JsonDocument { metadata, data })
+    pub async fn get(&self, _id: &str) -> Result<JsonDocument, JsonStoreError> {
+        Err(JsonStoreError::NotImplemented)
     }
 
     /// Update a document
-    pub async fn update(&self, id: &str, data: Value) -> Result<JsonDocument, JsonStoreError> {
-        let mut document = self.get(id).await?;
-
-        document.data = data;
-        document.metadata.updated_at = chrono::Utc::now();
-        document.metadata.version += 1;
-
-        // Update document
-        let doc_key = self.doc_key(id);
-        let doc_value = serde_json::to_string(&document.data)?;
-
-        let set_request = tokio_stream::iter(
-            vec![crate::proto::kv::SetRequest {
-                key: doc_key,
-                value: doc_value,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .set(tonic::Request::new(set_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        // Update metadata
-        let meta_key = self.meta_key(id);
-        let meta_value = serde_json::to_string(&document.metadata)?;
-
-        let meta_request = tokio_stream::iter(
-            vec![crate::proto::kv::SetRequest {
-                key: meta_key,
-                value: meta_value,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .set(tonic::Request::new(meta_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        // Update indexes
-        self.update_indexes(id, Some(&document.data), &data)?;
-
-        Ok(document)
+    pub async fn update(&self, _id: &str, _data: Value) -> Result<JsonDocument, JsonStoreError> {
+        Err(JsonStoreError::NotImplemented)
     }
 
     /// Partially update a document using JSONPath
     pub async fn patch(
         &self,
-        id: &str,
-        path: &str,
-        value: Value,
+        _id: &str,
+        _path: &str,
+        _value: Value,
     ) -> Result<JsonDocument, JsonStoreError> {
-        let mut document = self.get(id).await?;
-
-        // Apply the patch
-        JsonPath::set(&mut document.data, path, value)?;
-
-        // Save the updated document
-        self.update(id, document.data).await
+        Err(JsonStoreError::NotImplemented)
     }
 
     /// Delete a document
-    pub async fn delete(&self, id: &str) -> Result<(), JsonStoreError> {
-        let document = self.get(id).await?;
-
-        // Remove from indexes
-        self.remove_from_indexes(id, &document.data)?;
-
-        // Delete document
-        let doc_key = self.doc_key(id);
-        let del_request = tokio_stream::iter(
-            vec![crate::proto::kv::DeleteRequest {
-                key: doc_key,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .delete(tonic::Request::new(del_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        // Delete metadata
-        let meta_key = self.meta_key(id);
-        let meta_del_request = tokio_stream::iter(
-            vec![crate::proto::kv::DeleteRequest {
-                key: meta_key,
-                transaction_id: None,
-            }]
-            .into_iter()
-            .map(Ok),
-        );
-
-        self.backend
-            .delete(tonic::Request::new(meta_del_request))
-            .await
-            .map_err(|e| JsonStoreError::BackendError(e.to_string()))?;
-
-        Ok(())
+    pub async fn delete(&self, _id: &str) -> Result<(), JsonStoreError> {
+        Err(JsonStoreError::NotImplemented)
     }
 
     /// Query documents using JSONPath
     pub async fn query(
         &self,
-        json_path: &str,
-        value: &Value,
+        _json_path: &str,
+        _value: &Value,
     ) -> Result<Vec<String>, JsonStoreError> {
-        // In a real implementation, this would use the index system
-        // For now, return empty results
-        Ok(Vec::new())
+        Err(JsonStoreError::NotImplemented)
     }
 
     fn update_indexes(
