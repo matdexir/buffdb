@@ -1,0 +1,31 @@
+name: Build with protoc example
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          
+      # Alternative: Install specific protoc version
+      # - name: Install protoc
+      #   uses: arduino/setup-protoc@v3
+      #   with:
+      #     version: "25.1"
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          
+      - name: Build
+        run: cargo build --all-features
+        
+      - name: Test
+        run: cargo test --all-features

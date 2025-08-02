@@ -24,7 +24,7 @@ BuffDB is a lightweight, high-performance embedded database with networking capa
 
 ### Prerequisites
 
-BuffDB requires `protoc` (Protocol Buffers compiler) for building:
+BuffDB requires `protoc` (Protocol Buffers compiler):
 
 ```bash
 # Ubuntu/Debian
@@ -37,18 +37,10 @@ brew install protobuf
 choco install protoc
 ```
 
-### Install BuffDB Server
+### Start BuffDB
 
 ```bash
-# Install from crates.io
 cargo install buffdb
-
-# Or clone and build
-git clone https://github.com/buffdb/buffdb
-cd buffdb
-cargo build --release
-
-# Start the server
 buffdb run
 ```
 
@@ -261,26 +253,16 @@ go get google.golang.org/grpc
 ```
 </details>
 
-## 🛠️ Installation Options
+## 🛠️ Installation
 
-### Binary Release
 ```bash
-# Linux/macOS
-curl -L https://github.com/buffdb/buffdb/releases/latest/download/buffdb-$(uname -s)-$(uname -m) -o buffdb
-chmod +x buffdb
-./buffdb run
-
-# Using cargo
+# Install from crates.io
 cargo install buffdb
-```
 
-### Docker
-```bash
+# Docker
 docker run -p 9313:9313 ghcr.io/buffdb/buffdb:latest
-```
 
-### From Source
-```bash
+# From source
 git clone https://github.com/buffdb/buffdb
 cd buffdb
 cargo build --release
@@ -346,10 +328,10 @@ buffdb run --addr [::1]:9313 --kv-store kv.db --blob-store blob.db
 ```
 
 ### Backends
-| Backend | Feature Flag | Performance | Use Case |
-|---------|-------------|-------------|----------|
-| SQLite | `vendored-sqlite` | Balanced | General purpose |
-| DuckDB | `vendored-duckdb` | Analytics | OLAP workloads |
+| Backend | Feature Flag | Performance | Use Case | Status |
+|---------|-------------|-------------|----------|--------|
+| SQLite | `vendored-sqlite` | Balanced | General purpose | ✅ Stable |
+| DuckDB | `vendored-duckdb` | Analytics | OLAP workloads | ⚠️ Experimental |
 
 ## 🏗️ Architecture
 
@@ -383,96 +365,18 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
 
-## TypeScript interaction
+## 🔧 Backend Support
 
-Using auto-generated code from the protobuf definition, we can interact with the server in many
-languages. The following example demonstrates how to interact with the server in TypeScript. The
-server is assumed to be running on port 9313. See the `examples` directory for demos in other
-languages.
+**⚠️ DuckDB Support (Experimental)**
 
-```typescript
-import * as grpc from "@grpc/grpc-js";
-import * as protoLoader from "@grpc/proto-loader";
-import type { ProtoGrpcType as BlobType } from "./proto/blob";
-import type { StoreResponse } from "./proto/buffdb/blob/StoreResponse";
+DuckDB backend is currently experimental due to:
+- Platform-specific linking issues (especially on macOS)
+- Incomplete Rust bindings ([duckdb/duckdb-rs#368](https://github.com/duckdb/duckdb-rs/issues/368))
+- Performance optimizations still in progress
 
-const proto = grpc.loadPackageDefinition(
-    protoLoader.loadSync("../../proto/blob.proto")
-) as unknown as BlobType;
+For production use, we recommend SQLite backend which is stable and well-tested.
 
-const blob_client = new proto.buffdb.blob.Blob(
-    "[::1]:9313",
-    grpc.credentials.createInsecure()
-);
-const get = blob_client.Get();
-const store = blob_client.Store();
-
-// Be sure to set up the listeners before writing data!
-
-get.on("data", (data) => console.log("received data from GET: ", data));
-get.on("end", () => console.log("stream GET ended"));
-
-const blob_ids: number[] = [];
-store.on("data", (raw_id: StoreResponse) => {
-    const id = (raw_id.id as protoLoader.Long).toNumber();
-    console.log("received data from STORE: ", id);
-    blob_ids.push(id);
-});
-store.on("end", () => console.log("stream STORE ended"));
-
-store.write({ bytes: Buffer.from("abcdef"), metadata: "{ offset: 6 }" });
-store.write({ bytes: Buffer.from("ghijkl") });
-
-store.end();
-
-// Give the store time to finish its operations before asking for data back.
-// We could also do this in the callback of other events to be certain that it's been inserted.
-setTimeout(() => {
-    for (const id of blob_ids) {
-        console.log(`requesting ${id}`);
-        get.write({ id });
-    }
-    get.end();
-}, 100);
-```
-
-This example is present in `examples/typescript`. To run it, you need to have Node.js installed. Run
-`npm i` to install the dependencies and `npm run exec` to run the example.
-
-## How to use
-
-### Supported backends
-
-| Backend | Support status | Raw query support | Feature flag (vendored)      | CLI flag     |
-| ------- | -------------- | ----------------- | ---------------------------- | ------------ |
-| SQLite  | Full support   | ✅                | `sqlite` (`vendored-sqlite`) | `-b sqlite`  |
-| DuckDB  | Partial        | ✅                | `duckdb` (`vendored-duckdb`) | `-b duckdb`  |
-
-Blockers for full DuckDB support include [duckdb/duckdb-rs#368](https://github.com/duckdb/duckdb-rs/issues/368),
-but other issues are necessary to have best performance.
-
-By default, all backends are included and vendored. To exclude a backend, use the
-`--no-default-features` flag with cargo and re-enable the desired backend with `--features`. **If
-you encounter unexpected errors, consider using a vendored backend.**
-
-### Server
-
-To run the server, you need to [have Rust installed](https://rustup.rs/). Then, with the repository
-cloned, you can run
-
-```bash
-cargo run --all-features -- run
-```
-
-This will start the server on `[::1]:9313`, storing the key-value pairs in `kv_store.db` and
-the blob data in `blob_store.db`. All three can be configured with command line flags:
-`--addr`, `--kv-store`, and `--blob-store` respectively.
-
-To build with optimizations enabled, run `cargo build --all-features --release`. The resulting
-binary will be located at `target/release/buffdb`. It is statically linked (excluding the backends
-depending on flags), so it can be moved anywhere on your file system without issue.
-
-Prefer to handle the gRPC server yourself? `buffdb` can be used as a library as well!
+By default, SQLite backend is included and vendored. To use DuckDB (experimental), enable it with `--features duckdb`.
 
 ### Command line interface
 
@@ -509,63 +413,17 @@ All commands for `kv` and `blob` can use `-s`/`--store` to specify which store t
 are `kv_store.db` and `blob_store.db` respectively. To select a backend, use `-b`/`--backend`. The
 default varies by which backends are enabled.
 
-### Library usage in Rust
+## 📚 Using BuffDB as a Library
 
-Run `cargo add buffdb tonic tokio futures` to add the necessary dependencies. Then you can execute
-the following code, which is placed in `src/main.rs`.
+See the [Rust example](#-rust) above for library usage.
 
-```rust
-use buffdb::backend::Sqlite;
-use buffdb::kv::{Key, KeyValue, Value};
-use tonic::{Request, IntoRequest};
-use futures::{stream, StreamExt as _};
+## 🎯 Use Cases
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = buffdb::transitive::kv_client::<_, Sqlite>("kv_store.db").await?;
-    client
-        .set(stream::iter([KeyValue {
-            key: "key_set".to_owned(),
-            value: "value_set".to_owned(),
-        }]))
-        .await?
-        .into_inner();
+- **Offline-First Apps**: Note-taking, games, fieldwork applications, airline systems, collaborative documents
+- **IoT & Edge Computing**: Managing device configurations and states locally before cloud sync
+- **Low-Bandwidth Environments**: Reducing serialization overhead with Protocol Buffers
+- **Embedded Analytics**: Local data processing with optional network access
 
-    let mut stream = client
-        .get(stream::iter([Key {
-            key: "key_get".to_owned(),
-        }]))
-        .await?
-        .into_inner();
-    let Value { value } = stream.next().await.unwrap()?;
-    assert_eq!(value, "value_get");
+## 🙏 Acknowledgments
 
-    Ok(())
-}
-```
-
-This project is inspired by conversations with Michael Cahill, Professor of Practice, School of
-Computer Science, University of Sydney
-
-## Background
-
-This project was inspired by our many edge customers of ours dealing with the challenges associated
-with low-bandwidth and high performance. We hope that we can build a solution that is helpful for
-teams tageting edge computing environments.
-
-Today, buffdb’s primary focus is speed: we try to ensure some level of durability for which we pay a
-performance penalty, but our goal is to eventually be faster than any other embedded database.
-
-### High-level Goals
-
-- Reducing the overhead of serialization/deserialization.
-- Ensuring consistent data formats between local storage and network communication.
-- Providing faster read/write operations compared to JSON or XML.
-- Compact Data Storage: ProtoBufs can significantly reduce the size of stored data.
-- Interoperability: Seamless integration between the app’s local storage and backend systems.
-
-### Use Cases
-
-- Offline Data Access: For apps that need to function offline (e.g., note-taking apps, games,
-    fieldwork, airline, collaborative documents, etc.).
-- IoT: For managing device configurations and states locally before syncing with cloud servers.
+This project is inspired by conversations with Michael Cahill, Professor of Practice, School of Computer Science, University of Sydney, and feedback from edge computing customers dealing with low-bandwidth, high-performance challenges.

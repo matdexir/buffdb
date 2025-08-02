@@ -13,10 +13,8 @@
 //! 2. Implement a non-streaming backend specifically for internal use
 //! 3. Refactor the entire module to work with streaming natively
 
-use crate::backend::{DatabaseBackend, KvBackend};
 use crate::fts::FtsManager;
 use crate::index::{IndexConfig, IndexManager, IndexType};
-use crate::interop::IntoTonicStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::sync::Arc;
@@ -122,11 +120,13 @@ impl<Backend> JsonStore<Backend> {
     }
 
     /// Generate document key
+    #[allow(dead_code)]
     fn doc_key(&self, id: &str) -> String {
         format!("{}:doc:{}", self.collection, id)
     }
 
     /// Generate metadata key
+    #[allow(dead_code)]
     fn meta_key(&self, id: &str) -> String {
         format!("{}:meta:{}", self.collection, id)
     }

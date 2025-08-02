@@ -23,12 +23,14 @@ async fn test_get() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_get".to_owned(),
             value: "value_get".to_owned(),
+            transaction_id: None,
         }]))
         .await?;
 
     let stream = client
         .get(stream::iter([GetRequest {
             key: "key_get".to_owned(),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
@@ -53,6 +55,7 @@ async fn test_set() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_set".to_owned(),
             value: "value_set".to_owned(),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
@@ -77,12 +80,14 @@ async fn test_delete() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_delete".to_owned(),
             value: "value_delete".to_owned(),
+            transaction_id: None,
         }]))
         .await?;
 
     let stream = client
         .delete(stream::iter([DeleteRequest {
             key: "key_delete".to_owned(),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
@@ -97,6 +102,7 @@ async fn test_delete() -> Result<()> {
     let mut response = client
         .get(stream::iter([GetRequest {
             key: "key_delete".to_owned(),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
@@ -117,6 +123,7 @@ async fn test_eq() -> Result<()> {
             .set(stream::iter([SetRequest {
                 key: key.to_owned(),
                 value: "value_eq".to_owned(),
+                transaction_id: None,
             }]))
             .await?;
     }
@@ -144,6 +151,7 @@ async fn test_eq() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_e_eq".to_owned(),
             value: "value2_eq".to_owned(),
+            transaction_id: None,
         }]))
         .await?;
 
@@ -186,6 +194,7 @@ async fn test_not_eq() -> Result<()> {
             .set(stream::iter([SetRequest {
                 key: key.to_owned(),
                 value: format!("value{idx}_neq"),
+                transaction_id: None,
             }]))
             .await?;
     }
@@ -213,6 +222,7 @@ async fn test_not_eq() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_e_neq".to_owned(),
             value: "value2_neq".to_owned(),
+            transaction_id: None,
         }]))
         .await?;
 

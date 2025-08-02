@@ -26,6 +26,7 @@ async fn test_kv_query() -> Result<()> {
         .set(stream::iter([SetRequest {
             key: "key_raw_query".to_owned(),
             value: "value_raw_query".to_owned(),
+            transaction_id: None,
         }]))
         .await;
 
@@ -83,6 +84,7 @@ async fn test_blob_query() -> Result<()> {
         .store(stream::iter([StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         }]))
         .await?
         .into_inner()

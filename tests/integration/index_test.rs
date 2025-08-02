@@ -1,5 +1,3 @@
-//! Integration tests for secondary indexing
-
 use buffdb::{
     index::{IndexConfig, IndexType},
     store::KvStore,
@@ -8,7 +6,7 @@ use buffdb::{
 
 #[tokio::test]
 async fn test_create_and_drop_index() {
-    let store = KvStore::<Backend>::at_location(Location::InMemory).unwrap();
+    let store = KvStore::<super::Backend>::at_location(Location::InMemory).unwrap();
 
     // Create a hash index
     let index_config = IndexConfig {
@@ -39,7 +37,7 @@ async fn test_create_and_drop_index() {
 
 #[tokio::test]
 async fn test_unique_index_constraint() {
-    let store = KvStore::<Backend>::at_location(Location::InMemory).unwrap();
+    let store = KvStore::<super::Backend>::at_location(Location::InMemory).unwrap();
 
     // Create a unique index
     let index_config = IndexConfig {
@@ -133,7 +131,7 @@ async fn test_index_manager_operations() {
 
 #[tokio::test]
 async fn test_composite_index() {
-    let store = KvStore::<Backend>::at_location(Location::InMemory).unwrap();
+    let store = KvStore::<super::Backend>::at_location(Location::InMemory).unwrap();
 
     // Create a composite index on multiple fields
     let composite_config = IndexConfig {

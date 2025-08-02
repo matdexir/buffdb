@@ -1,194 +1,171 @@
-//! Integration tests for transaction support
+use anyhow::Result;
+use buffdb::proto::kv::{
+    BeginTransactionRequest, CommitTransactionRequest, GetRequest,
+    RollbackTransactionRequest, SetRequest,
+};
+use buffdb::transitive::kv_client;
+use buffdb::Location;
+use futures::{stream, StreamExt as _};
+use serial_test::serial;
+use std::sync::LazyLock;
 
-use buffdb::{proto::kv::*, service::kv::KvRpc, store::KvStore, Location};
-use std::time::Duration;
-use tokio_stream::StreamExt;
+static KV_STORE_LOC: LazyLock<Location> = LazyLock::new(|| Location::InMemory);
 
 #[tokio::test]
-async fn test_basic_transaction_commit() {
-    // Create a store with transaction support
-    let store =
-        KvStore::<Backend>::with_transactions(Location::InMemory, Duration::from_secs(30)).unwrap();
+#[serial]
+async fn test_basic_transaction_commit() -> Result<()> {
+    let mut client = kv_client::<_, super::Backend>(KV_STORE_LOC.clone()).await?;
 
     // Begin transaction
-    let begin_resp = store
-        .begin_transaction(tonic::Request::new(BeginTransactionRequest {
+    let begin_resp = client
+        .begin_transaction(BeginTransactionRequest {
             read_only: Some(false),
             timeout_ms: Some(5000),
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     let transaction_id = begin_resp.into_inner().transaction_id;
 
     // Set a value within the transaction
-    let set_stream = tokio_stream::iter(
-        vec![SetRequest {
+    let mut set_resp = client
+        .set(stream::iter([SetRequest {
             key: "test_key".to_string(),
             value: "test_value".to_string(),
             transaction_id: Some(transaction_id.clone()),
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    let mut set_resp = store
-        .set(tonic::Request::new(set_stream))
-        .await
-        .unwrap()
+        }]))
+        .await?
         .into_inner();
 
     // Verify set response
     if let Some(resp) = set_resp.next().await {
-        assert_eq!(resp.unwrap().key, "test_key");
+        assert_eq!(resp?.key, "test_key");
     }
 
     // Commit transaction
-    let commit_resp = store
-        .commit_transaction(tonic::Request::new(CommitTransactionRequest {
+    let commit_resp = client
+        .commit_transaction(CommitTransactionRequest {
             transaction_id: transaction_id.clone(),
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     assert!(commit_resp.into_inner().success);
 
     // Verify the value persists after commit
-    let get_stream = tokio_stream::iter(
-        vec![GetRequest {
+    let mut get_resp = client
+        .get(stream::iter([GetRequest {
             key: "test_key".to_string(),
             transaction_id: None,
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    let mut get_resp = store
-        .get(tonic::Request::new(get_stream))
-        .await
-        .unwrap()
+        }]))
+        .await?
         .into_inner();
 
     if let Some(resp) = get_resp.next().await {
-        assert_eq!(resp.unwrap().value, "test_value");
+        assert_eq!(resp?.value, "test_value");
     }
+
+    drop(client);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_transaction_rollback() {
-    let store =
-        KvStore::<Backend>::with_transactions(Location::InMemory, Duration::from_secs(30)).unwrap();
+#[serial]
+async fn test_transaction_rollback() -> Result<()> {
+    let mut client = kv_client::<_, super::Backend>(KV_STORE_LOC.clone()).await?;
 
     // Begin transaction
-    let begin_resp = store
-        .begin_transaction(tonic::Request::new(BeginTransactionRequest {
+    let begin_resp = client
+        .begin_transaction(BeginTransactionRequest {
             read_only: Some(false),
             timeout_ms: Some(5000),
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     let transaction_id = begin_resp.into_inner().transaction_id;
 
     // Set a value within the transaction
-    let set_stream = tokio_stream::iter(
-        vec![SetRequest {
+    let _set_resp = client
+        .set(stream::iter([SetRequest {
             key: "rollback_key".to_string(),
             value: "rollback_value".to_string(),
             transaction_id: Some(transaction_id.clone()),
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    store.set(tonic::Request::new(set_stream)).await.unwrap();
+        }]))
+        .await?;
 
     // Rollback transaction
-    let rollback_resp = store
-        .rollback_transaction(tonic::Request::new(RollbackTransactionRequest {
+    let rollback_resp = client
+        .rollback_transaction(RollbackTransactionRequest {
             transaction_id: transaction_id.clone(),
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     assert!(rollback_resp.into_inner().success);
 
     // Verify the value does not exist after rollback
-    let get_stream = tokio_stream::iter(
-        vec![GetRequest {
+    let mut get_resp = client
+        .get(stream::iter([GetRequest {
             key: "rollback_key".to_string(),
             transaction_id: None,
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    let mut get_resp = store
-        .get(tonic::Request::new(get_stream))
-        .await
-        .unwrap()
+        }]))
+        .await?
         .into_inner();
 
-    // Should not receive any value
-    assert!(get_resp.next().await.is_none());
+    // Should get an error or no value
+    match get_resp.next().await {
+        Some(Err(_)) => {} // Expected - key not found
+        Some(Ok(_)) => panic!("Value should not exist after rollback"),
+        None => {} // Also acceptable - no results
+    }
+
+    drop(client);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_read_only_transaction() {
-    let store =
-        KvStore::<Backend>::with_transactions(Location::InMemory, Duration::from_secs(30)).unwrap();
+#[serial]
+async fn test_read_only_transaction() -> Result<()> {
+    let mut client = kv_client::<_, super::Backend>(KV_STORE_LOC.clone()).await?;
 
     // First, set some initial data
-    let set_stream = tokio_stream::iter(
-        vec![SetRequest {
+    let _set_resp = client
+        .set(stream::iter([SetRequest {
             key: "readonly_test".to_string(),
             value: "initial_value".to_string(),
             transaction_id: None,
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    store.set(tonic::Request::new(set_stream)).await.unwrap();
+        }]))
+        .await?;
 
     // Begin read-only transaction
-    let begin_resp = store
-        .begin_transaction(tonic::Request::new(BeginTransactionRequest {
+    let begin_resp = client
+        .begin_transaction(BeginTransactionRequest {
             read_only: Some(true),
             timeout_ms: Some(5000),
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     let transaction_id = begin_resp.into_inner().transaction_id;
 
     // Read value within transaction
-    let get_stream = tokio_stream::iter(
-        vec![GetRequest {
+    let mut get_resp = client
+        .get(stream::iter([GetRequest {
             key: "readonly_test".to_string(),
             transaction_id: Some(transaction_id.clone()),
-        }]
-        .into_iter()
-        .map(Ok),
-    );
-
-    let mut get_resp = store
-        .get(tonic::Request::new(get_stream))
-        .await
-        .unwrap()
+        }]))
+        .await?
         .into_inner();
 
     if let Some(resp) = get_resp.next().await {
-        assert_eq!(resp.unwrap().value, "initial_value");
+        assert_eq!(resp?.value, "initial_value");
     }
 
     // Commit read-only transaction
-    let commit_resp = store
-        .commit_transaction(tonic::Request::new(CommitTransactionRequest {
+    let commit_resp = client
+        .commit_transaction(CommitTransactionRequest {
             transaction_id,
-        }))
-        .await
-        .unwrap();
+        })
+        .await?;
 
     assert!(commit_resp.into_inner().success);
+
+    drop(client);
+    Ok(())
 }

@@ -40,12 +40,13 @@ async fn test_get() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
 
     let response = client
-        .get(stream::iter([GetRequest { id }]))
+        .get(stream::iter([GetRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     drop(client);
@@ -71,12 +72,13 @@ async fn test_store() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         },
     )
     .await?;
 
     let response = client
-        .get(stream::iter([GetRequest { id }]))
+        .get(stream::iter([GetRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     drop(client);
@@ -102,6 +104,7 @@ async fn test_update_both() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -112,13 +115,14 @@ async fn test_update_both() -> Result<()> {
             bytes: Some(b"def".to_vec()),
             should_update_metadata: true,
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
     assert_stream_eq(stream, [UpdateResponse { id }]).await;
 
     let response = client
-        .get(stream::iter([GetRequest { id }]))
+        .get(stream::iter([GetRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     drop(client);
@@ -144,6 +148,7 @@ async fn test_update_bytes() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -154,12 +159,13 @@ async fn test_update_bytes() -> Result<()> {
             bytes: Some(b"def".to_vec()),
             should_update_metadata: false,
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
     assert_stream_eq(stream, [UpdateResponse { id }]).await;
 
-    let response = client.get(stream::iter([GetRequest { id }])).await?;
+    let response = client.get(stream::iter([GetRequest { id, transaction_id: None }])).await?;
     drop(client);
     assert_stream_eq(
         response.into_inner(),
@@ -183,6 +189,7 @@ async fn test_update_metadata() -> Result<()> {
         StoreRequest {
             bytes: b"def".to_vec(),
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         },
     )
     .await?;
@@ -193,12 +200,13 @@ async fn test_update_metadata() -> Result<()> {
             bytes: None,
             should_update_metadata: true,
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         }]))
         .await?
         .into_inner();
     assert_stream_eq(stream, [UpdateResponse { id }]).await;
 
-    let response = client.get(stream::iter([GetRequest { id }])).await?;
+    let response = client.get(stream::iter([GetRequest { id, transaction_id: None }])).await?;
     drop(client);
     assert_stream_eq(
         response.into_inner(),
@@ -222,18 +230,19 @@ async fn test_delete_with_metadata() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: Some("{}".to_owned()),
+            transaction_id: None,
         },
     )
     .await?;
 
     let response = client
-        .delete(stream::iter([DeleteRequest { id }]))
+        .delete(stream::iter([DeleteRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     assert_stream_eq(response, [DeleteResponse { id }]).await;
 
     let mut response = client
-        .get(stream::iter([GetRequest { id }]))
+        .get(stream::iter([GetRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     drop(client);
@@ -253,18 +262,19 @@ async fn test_delete_no_metadata() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
 
     let response = client
-        .delete(stream::iter([DeleteRequest { id }]))
+        .delete(stream::iter([DeleteRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     assert_stream_eq(response, [DeleteResponse { id }]).await;
 
     let mut response = client
-        .get(stream::iter([GetRequest { id }]))
+        .get(stream::iter([GetRequest { id, transaction_id: None }]))
         .await?
         .into_inner();
     drop(client);
@@ -284,6 +294,7 @@ async fn test_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -292,6 +303,7 @@ async fn test_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -300,6 +312,7 @@ async fn test_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"ghijkl".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -336,6 +349,7 @@ async fn test_not_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -344,6 +358,7 @@ async fn test_not_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"abcdef".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
@@ -352,6 +367,7 @@ async fn test_not_eq_data() -> Result<()> {
         StoreRequest {
             bytes: b"ghijkl".to_vec(),
             metadata: None,
+            transaction_id: None,
         },
     )
     .await?;
