@@ -1,6 +1,6 @@
 # 🦁 BuffDB
 
-[![License: MIT/Apache](https://img.shields.io/badge/License-MIT%2FApache-blue.svg)](LICENSE-MIT)
+[![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/License-FSL--1.1--Apache--2.0-blue.svg)](LICENSE)
 [![Tests](https://github.com/buffdb/buffdb/actions/workflows/test.yml/badge.svg)](https://github.com/buffdb/buffdb/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/discord/1267505649198305384?label=Discord&logo=discord)](https://discord.gg/4Pzv6sB8)
 [![Crates.io](https://img.shields.io/crates/v/buffdb.svg)](https://crates.io/crates/buffdb)
@@ -37,11 +37,49 @@ brew install protobuf
 choco install protoc
 ```
 
-### Start BuffDB
+### macOS Setup
 
+macOS users need additional dependencies due to linking requirements:
+
+```bash
+# Install required dependencies
+brew install protobuf sqlite libiconv
+
+# Clone the repository
+git clone https://github.com/buffdb/buffdb
+cd buffdb
+
+# The project includes a .cargo/config.toml that sets up the correct paths
+# If you still encounter linking errors, you can manually set:
+export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
+export RUSTFLAGS="-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
+```
+
+### Building and Running
+
+#### Option 1: Install from crates.io
 ```bash
 cargo install buffdb
 buffdb run
+```
+
+#### Option 2: Build from source
+```bash
+# Build with all features (includes all backends)
+cargo build --all-features --release
+
+# Run the server
+./target/release/buffdb run
+
+# Or run directly with cargo
+cargo run --all-features -- run
+```
+
+#### Option 3: Quick development build
+```bash
+# For development with faster compilation
+cargo build --features sqlite
+cargo run --features sqlite -- run
 ```
 
 ### Language Examples
@@ -272,17 +310,14 @@ cargo build --release
 ## 📚 Advanced Features
 
 ### Transactions
-```rust
-// Begin transaction
-let tx_id = client.begin_transaction(false, Some(5000)).await?;
 
-// Operations within transaction
-client.set_in_transaction(&tx_id, "key1", "value1").await?;
-client.set_in_transaction(&tx_id, "key2", "value2").await?;
+**Note**: Transaction support over gRPC is deprecated. For ACID guarantees, use one of these approaches:
 
-// Commit or rollback
-client.commit_transaction(&tx_id).await?;
-```
+1. **Batch Operations** (recommended) - Send multiple operations in a single request
+2. **Client-Side Transactions** - Manage your own database connection
+3. **Session-Based API** (future) - Long-lived connections with transaction support
+
+The underlying SQLite and DuckDB backends fully support transactions when accessed directly.
 
 ### Secondary Indexes
 ```rust
@@ -363,7 +398,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
+FSL-1.1-Apache-2.0. See [LICENSE](LICENSE) for details.
 
 ## 🔧 Backend Support
 
@@ -423,6 +458,38 @@ See the [Rust example](#-rust) above for library usage.
 - **IoT & Edge Computing**: Managing device configurations and states locally before cloud sync
 - **Low-Bandwidth Environments**: Reducing serialization overhead with Protocol Buffers
 - **Embedded Analytics**: Local data processing with optional network access
+
+## 🔧 Troubleshooting
+
+### macOS Linking Errors
+
+If you encounter `ld: library not found for -liconv` errors:
+
+1. Ensure you have the `.cargo/config.toml` file in the project root:
+```toml
+[build]
+rustflags = ["-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"]
+
+[env]
+LIBRARY_PATH = "/opt/homebrew/lib"
+```
+
+2. For Apple Silicon (M1/M2) Macs, ensure Homebrew is in `/opt/homebrew`:
+```bash
+ls /opt/homebrew/lib/libiconv*
+```
+
+3. For Intel Macs, Homebrew may be in `/usr/local`:
+```bash
+# Update the config.toml accordingly:
+LIBRARY_PATH = "/usr/local/lib"
+```
+
+4. If issues persist, add to your shell profile (`~/.zshrc` or `~/.bash_profile`):
+```bash
+export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
+export RUSTFLAGS="-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
+```
 
 ## 🙏 Acknowledgments
 

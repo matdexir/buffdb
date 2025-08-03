@@ -115,10 +115,7 @@ impl SecondaryIndex {
                     }
                 }
 
-                index
-                    .entry(value)
-                    .or_default()
-                    .insert(key.to_string());
+                index.entry(value).or_default().insert(key.to_string());
             }
             IndexType::BTree => {
                 let mut index = self.btree_index.write().unwrap();
@@ -134,10 +131,7 @@ impl SecondaryIndex {
                     }
                 }
 
-                index
-                    .entry(value)
-                    .or_default()
-                    .insert(key.to_string());
+                index.entry(value).or_default().insert(key.to_string());
             }
             _ => {
                 // TODO: Implement other index types

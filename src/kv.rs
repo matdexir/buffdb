@@ -88,7 +88,7 @@ where
     Backend::Error: std::fmt::Display,
 {
     /// Create a new key-value store with transaction support.
-    /// 
+    ///
     /// DEPRECATED: Transaction support over gRPC is being phased out.
     /// Use batch operations or client-side transaction management instead.
     #[deprecated(

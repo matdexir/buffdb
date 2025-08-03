@@ -1,7 +1,7 @@
 use anyhow::Result;
 use buffdb::proto::kv::{
-    BeginTransactionRequest, CommitTransactionRequest, GetRequest,
-    RollbackTransactionRequest, SetRequest,
+    BeginTransactionRequest, CommitTransactionRequest, GetRequest, RollbackTransactionRequest,
+    SetRequest,
 };
 use buffdb::transitive::kv_client;
 use buffdb::Location;
@@ -159,9 +159,7 @@ async fn test_read_only_transaction() -> Result<()> {
 
     // Commit read-only transaction
     let commit_resp = client
-        .commit_transaction(CommitTransactionRequest {
-            transaction_id,
-        })
+        .commit_transaction(CommitTransactionRequest { transaction_id })
         .await?;
 
     assert!(commit_resp.into_inner().success);
