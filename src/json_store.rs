@@ -355,6 +355,7 @@ impl<Backend> JsonStore<Backend> {
         Err(JsonStoreError::NotImplemented)
     }
 
+    #[allow(dead_code)]
     fn update_indexes(
         &self,
         _id: &str,
@@ -368,6 +369,7 @@ impl<Backend> JsonStore<Backend> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn remove_from_indexes(&self, _id: &str, _data: &Value) -> Result<(), JsonStoreError> {
         // In a real implementation, we would remove from all indexes
         Ok(())

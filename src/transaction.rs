@@ -33,6 +33,7 @@ pub trait TransactionalBackend: crate::backend::DatabaseBackend {
 #[derive(Debug)]
 pub struct TransactionManager<Backend: TransactionalBackend> {
     transactions: Arc<Mutex<HashMap<String, Backend::Transaction>>>,
+    #[allow(dead_code)]
     default_timeout: Duration,
 }
 
@@ -63,10 +64,16 @@ where
 
         let transaction_id = Uuid::new_v4().to_string();
 
-        self.transactions
-            .lock()
-            .unwrap()
-            .insert(transaction_id.clone(), transaction);
+        match self.transactions.lock() {
+            Ok(mut transactions) => {
+                transactions.insert(transaction_id.clone(), transaction);
+            }
+            Err(_) => {
+                // Can't return error here since we can't construct Backend::Error
+                // In production, this should probably panic as a poisoned mutex is a serious issue
+                panic!("Failed to acquire lock on transactions mutex - mutex poisoned");
+            }
+        }
 
         // TODO: Implement timeout handling
         if let Some(_timeout) = timeout_ms {
@@ -78,7 +85,7 @@ where
 
     /// Get a transaction by ID, removing it from the manager
     pub fn take_transaction(&self, transaction_id: &str) -> Option<Backend::Transaction> {
-        self.transactions.lock().unwrap().remove(transaction_id)
+        self.transactions.lock().ok()?.remove(transaction_id)
     }
 
     /// Commit a transaction

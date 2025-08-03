@@ -12,14 +12,13 @@ mod sqlite {
     mod query {
         include!("query.rs");
     }
-    mod transaction {
-        include!("transaction_test.rs");
-    }
+    // Transaction tests removed - gRPC transaction support is deprecated
     mod index {
         include!("index_test.rs");
     }
 }
 
+#[cfg(feature = "duckdb")]
 mod duckdb {
     type Backend = buffdb::backend::DuckDb;
     const BLOB_PATH: &str = "blob_store.duckdb-test.db";

@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 /// Types of indexes supported
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexType {
     /// Hash index for exact matches
     Hash,
@@ -50,31 +50,31 @@ pub enum IndexValue {
 
 impl From<String> for IndexValue {
     fn from(s: String) -> Self {
-        IndexValue::String(s)
+        Self::String(s)
     }
 }
 
 impl From<&str> for IndexValue {
     fn from(s: &str) -> Self {
-        IndexValue::String(s.to_string())
+        Self::String(s.to_string())
     }
 }
 
 impl From<i64> for IndexValue {
     fn from(i: i64) -> Self {
-        IndexValue::Integer(i)
+        Self::Integer(i)
     }
 }
 
 impl From<f64> for IndexValue {
     fn from(f: f64) -> Self {
-        IndexValue::Float(ordered_float::OrderedFloat(f))
+        Self::Float(ordered_float::OrderedFloat(f))
     }
 }
 
 impl From<bool> for IndexValue {
     fn from(b: bool) -> Self {
-        IndexValue::Boolean(b)
+        Self::Boolean(b)
     }
 }
 
@@ -117,7 +117,7 @@ impl SecondaryIndex {
 
                 index
                     .entry(value)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(key.to_string());
             }
             IndexType::BTree => {
@@ -136,7 +136,7 @@ impl SecondaryIndex {
 
                 index
                     .entry(value)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(key.to_string());
             }
             _ => {

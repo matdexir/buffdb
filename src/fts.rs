@@ -169,14 +169,29 @@ impl FtsIndex {
         for (term, position) in &tokens {
             term_positions
                 .entry(term.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(*position);
         }
 
         // Update inverted index
-        let mut inverted_index = self.inverted_index.write().unwrap();
-        let mut doc_freq = self.doc_freq.write().unwrap();
-        let mut doc_lengths = self.doc_lengths.write().unwrap();
+        let mut inverted_index = self.inverted_index.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "index_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
+        let mut doc_freq = self.doc_freq.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "index_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
+        let mut doc_lengths = self.doc_lengths.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "index_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
 
         // Remove old document if it exists
         if doc_lengths.contains_key(&doc_id) {
@@ -196,7 +211,7 @@ impl FtsIndex {
             // Update inverted index
             inverted_index
                 .entry(term.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(doc_info);
 
             // Update document frequency
@@ -207,32 +222,76 @@ impl FtsIndex {
         doc_lengths.insert(doc_id, tokens.len());
 
         // Update statistics
-        let mut doc_count = self.doc_count.write().unwrap();
+        let mut doc_count = self.doc_count.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "index_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
         *doc_count = doc_lengths.len();
 
-        let mut avg_length = self.avg_doc_length.write().unwrap();
+        let mut avg_length = self.avg_doc_length.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "index_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
         *avg_length = doc_lengths.values().sum::<usize>() as f64 / *doc_count as f64;
+        
+        drop(avg_length);
+        drop(doc_count);
+        drop(doc_lengths);
+        drop(doc_freq);
+        drop(inverted_index);
 
         Ok(())
     }
 
     /// Remove a document from the index
     pub fn remove_document(&self, doc_id: &str) -> Result<(), IndexError> {
-        let mut inverted_index = self.inverted_index.write().unwrap();
-        let mut doc_freq = self.doc_freq.write().unwrap();
-        let mut doc_lengths = self.doc_lengths.write().unwrap();
+        let mut inverted_index = self.inverted_index.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "remove_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
+        let mut doc_freq = self.doc_freq.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "remove_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
+        let mut doc_lengths = self.doc_lengths.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "remove_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
 
         self.remove_document_internal(doc_id, &mut inverted_index, &mut doc_freq);
         doc_lengths.remove(doc_id);
 
         // Update statistics
-        let mut doc_count = self.doc_count.write().unwrap();
+        let mut doc_count = self.doc_count.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "remove_document".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
         *doc_count = doc_lengths.len();
 
         if *doc_count > 0 {
-            let mut avg_length = self.avg_doc_length.write().unwrap();
+            let mut avg_length = self.avg_doc_length.write().map_err(|_| {
+                IndexError::OperationNotSupported {
+                    operation: "remove_document".to_string(),
+                    index_type: "FTS".to_string(),
+                }
+            })?;
             *avg_length = doc_lengths.values().sum::<usize>() as f64 / *doc_count as f64;
+            drop(avg_length);
         }
+        drop(doc_lengths);
+        drop(doc_count);
 
         Ok(())
     }
@@ -278,8 +337,8 @@ impl FtsIndex {
         let mut doc_terms: HashMap<String, HashSet<String>> = HashMap::new();
 
         // BM25 parameters
-        let k1 = 1.2;
-        let b = 0.75;
+        let k1: f64 = 1.2;
+        let b: f64 = 0.75;
 
         for (term, _) in &query_terms {
             if let Some(docs) = inverted_index.get(term) {
@@ -293,12 +352,12 @@ impl FtsIndex {
                     // BM25 scoring
                     let tf = doc_info.term_freq as f64;
                     let score =
-                        idf * (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * normalized_len));
+                        idf * (tf * (k1 + 1.0)) / (tf + k1.mul_add(b.mul_add(normalized_len, 1.0 - b), 0.0));
 
                     *scores.entry(doc_info.doc_id.clone()).or_insert(0.0) += score;
                     doc_terms
                         .entry(doc_info.doc_id.clone())
-                        .or_insert_with(HashSet::new)
+                        .or_default()
                         .insert(term.clone());
                 }
             }
@@ -350,10 +409,7 @@ impl FtsIndex {
             }
         }
 
-        let candidates = match candidate_docs {
-            Some(docs) => docs,
-            None => return Vec::new(),
-        };
+        let Some(candidates) = candidate_docs else { return Vec::new() };
 
         // Check phrase proximity in candidate documents
         let mut results = Vec::new();
@@ -425,6 +481,12 @@ pub struct FtsManager {
     indexes: Arc<RwLock<HashMap<String, FtsIndex>>>,
 }
 
+impl Default for FtsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FtsManager {
     pub fn new() -> Self {
         Self {
@@ -434,13 +496,19 @@ impl FtsManager {
 
     /// Create a new FTS index
     pub fn create_index(&self, name: String) -> Result<(), IndexError> {
-        let mut indexes = self.indexes.write().unwrap();
+        let mut indexes = self.indexes.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "create_index".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
 
         if indexes.contains_key(&name) {
             return Err(IndexError::IndexAlreadyExists { name });
         }
 
         indexes.insert(name.clone(), FtsIndex::new(name));
+        drop(indexes);
         Ok(())
     }
 
@@ -450,7 +518,12 @@ impl FtsManager {
         name: String,
         tokenizer: Tokenizer,
     ) -> Result<(), IndexError> {
-        let mut indexes = self.indexes.write().unwrap();
+        let mut indexes = self.indexes.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "create_index_with_tokenizer".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
 
         if indexes.contains_key(&name) {
             return Err(IndexError::IndexAlreadyExists { name });
@@ -458,8 +531,9 @@ impl FtsManager {
 
         indexes.insert(
             name.clone(),
-            FtsIndex::with_tokenizer(name.clone(), tokenizer),
+            FtsIndex::with_tokenizer(name, tokenizer),
         );
+        drop(indexes);
         Ok(())
     }
 
@@ -471,7 +545,12 @@ impl FtsManager {
 
     /// Drop an index
     pub fn drop_index(&self, name: &str) -> Result<(), IndexError> {
-        let mut indexes = self.indexes.write().unwrap();
+        let mut indexes = self.indexes.write().map_err(|_| {
+            IndexError::OperationNotSupported {
+                operation: "drop_index".to_string(),
+                index_type: "FTS".to_string(),
+            }
+        })?;
 
         if indexes.remove(name).is_none() {
             return Err(IndexError::IndexNotFound {
@@ -479,6 +558,7 @@ impl FtsManager {
             });
         }
 
+        drop(indexes);
         Ok(())
     }
 }

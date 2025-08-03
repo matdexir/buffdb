@@ -1,3 +1,6 @@
+// Copyright 2025 Marcus Eagan
+// Licensed under FSL-1.1-Apache-2.0
+
 //! **BuffDB is experimental software**; many things are not yet decided.
 //!
 //! BuffDB is an implementation of a persistence layer for gRPC. Its goal is to abstract away

@@ -26,6 +26,7 @@ use tonic::{Request, Response, Status};
 #[derive(Debug)]
 pub struct KvStore<Backend: TransactionalBackend> {
     backend: Backend,
+    #[allow(dead_code)]
     transaction_manager: Option<Arc<TransactionManager<Backend>>>,
     index_manager: Arc<IndexManager>,
 }
@@ -87,6 +88,13 @@ where
     Backend::Error: std::fmt::Display,
 {
     /// Create a new key-value store with transaction support.
+    /// 
+    /// DEPRECATED: Transaction support over gRPC is being phased out.
+    /// Use batch operations or client-side transaction management instead.
+    #[deprecated(
+        since = "0.5.0",
+        note = "Transaction support over gRPC is problematic and will be removed. Use batch operations instead."
+    )]
     pub fn with_transactions(
         location: Location,
         transaction_timeout: Duration,
@@ -142,69 +150,28 @@ where
 
     async fn begin_transaction(
         &self,
-        request: Request<BeginTransactionRequest>,
+        _request: Request<BeginTransactionRequest>,
     ) -> Result<Response<BeginTransactionResponse>, Status> {
-        if let Some(transaction_manager) = &self.transaction_manager {
-            let req = request.into_inner();
-            let transaction_id = transaction_manager
-                .begin_transaction(
-                    &self.backend,
-                    req.read_only.unwrap_or(false),
-                    req.timeout_ms,
-                )
-                .map_err(|e| Status::internal(format!("Failed to begin transaction: {}", e)))?;
-
-            Ok(Response::new(BeginTransactionResponse { transaction_id }))
-        } else {
-            Err(Status::unimplemented(
-                "Transactions are not enabled for this store",
-            ))
-        }
+        Err(Status::unimplemented(
+            "Transaction support over gRPC is deprecated. Use batch operations or manage transactions client-side.",
+        ))
     }
 
     async fn commit_transaction(
         &self,
-        request: Request<CommitTransactionRequest>,
+        _request: Request<CommitTransactionRequest>,
     ) -> Result<Response<CommitTransactionResponse>, Status> {
-        if let Some(transaction_manager) = &self.transaction_manager {
-            let req = request.into_inner();
-            match transaction_manager.commit_transaction(&req.transaction_id) {
-                Ok(()) => Ok(Response::new(CommitTransactionResponse {
-                    success: true,
-                    error_message: None,
-                })),
-                Err(e) => Ok(Response::new(CommitTransactionResponse {
-                    success: false,
-                    error_message: Some(e),
-                })),
-            }
-        } else {
-            Err(Status::unimplemented(
-                "Transactions are not enabled for this store",
-            ))
-        }
+        Err(Status::unimplemented(
+            "Transaction support over gRPC is deprecated. Use batch operations or manage transactions client-side.",
+        ))
     }
 
     async fn rollback_transaction(
         &self,
-        request: Request<RollbackTransactionRequest>,
+        _request: Request<RollbackTransactionRequest>,
     ) -> Result<Response<RollbackTransactionResponse>, Status> {
-        if let Some(transaction_manager) = &self.transaction_manager {
-            let req = request.into_inner();
-            match transaction_manager.rollback_transaction(&req.transaction_id) {
-                Ok(()) => Ok(Response::new(RollbackTransactionResponse {
-                    success: true,
-                    error_message: None,
-                })),
-                Err(e) => Ok(Response::new(RollbackTransactionResponse {
-                    success: false,
-                    error_message: Some(e),
-                })),
-            }
-        } else {
-            Err(Status::unimplemented(
-                "Transactions are not enabled for this store",
-            ))
-        }
+        Err(Status::unimplemented(
+            "Transaction support over gRPC is deprecated. Use batch operations or manage transactions client-side.",
+        ))
     }
 }

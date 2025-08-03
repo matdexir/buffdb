@@ -4,7 +4,6 @@ use crate::transaction::{Transaction, TransactionalBackend, TransactionalKvBacke
 use crate::RpcResponse;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-// use tonic::Status; // Unused
 
 /// SQLite transaction wrapper
 #[derive(Debug)]
@@ -30,37 +29,62 @@ impl Transaction for SqliteTransaction {
     type Error = rusqlite::Error;
 
     fn commit(self) -> Result<(), Self::Error> {
-        let mut committed = self.committed.lock().unwrap();
+        let mut committed = self.committed.lock().map_err(|_| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Failed to acquire lock on committed flag".to_string()),
+            )
+        })?;
         if *committed {
             return Ok(());
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Failed to acquire lock on connection".to_string()),
+            )
+        })?;
         conn.execute("COMMIT", [])?;
         *committed = true;
+        drop(conn);
+        drop(committed);
         Ok(())
     }
 
     fn rollback(self) -> Result<(), Self::Error> {
-        let mut committed = self.committed.lock().unwrap();
+        let mut committed = self.committed.lock().map_err(|_| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Failed to acquire lock on committed flag".to_string()),
+            )
+        })?;
         if *committed {
             return Ok(());
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Failed to acquire lock on connection".to_string()),
+            )
+        })?;
         conn.execute("ROLLBACK", [])?;
         *committed = true;
+        drop(conn);
+        drop(committed);
         Ok(())
     }
 }
 
 impl Drop for SqliteTransaction {
     fn drop(&mut self) {
-        let committed = self.committed.lock().unwrap();
-        if !*committed {
-            // Rollback if not explicitly committed
-            if let Ok(conn) = self.conn.lock() {
-                let _ = conn.execute("ROLLBACK", []);
+        if let Ok(committed) = self.committed.lock() {
+            if !*committed {
+                // Rollback if not explicitly committed
+                if let Ok(conn) = self.conn.lock() {
+                    let _ = conn.execute("ROLLBACK", []);
+                }
             }
         }
     }

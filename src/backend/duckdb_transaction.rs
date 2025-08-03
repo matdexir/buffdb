@@ -2,9 +2,8 @@ use crate::backend::duckdb::DuckDb;
 use crate::backend::KvBackend;
 use crate::transaction::{Transaction, TransactionalBackend, TransactionalKvBackend};
 use crate::RpcResponse;
-use duckdb::Connection;
+use duckdb::{ffi, Connection};
 use std::sync::{Arc, Mutex};
-// use tonic::Status; // Unused
 
 /// DuckDB transaction wrapper
 #[derive(Debug)]
@@ -30,37 +29,62 @@ impl Transaction for DuckDbTransaction {
     type Error = duckdb::Error;
 
     fn commit(self) -> Result<(), Self::Error> {
-        let mut committed = self.committed.lock().unwrap();
+        let mut committed = self.committed.lock().map_err(|_| {
+            duckdb::Error::DuckDBFailure(
+                ffi::Error::new(1), // Generic error code
+                Some("Failed to acquire lock on committed flag".to_string()),
+            )
+        })?;
         if *committed {
             return Ok(());
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| {
+            duckdb::Error::DuckDBFailure(
+                ffi::Error::new(1), // Generic error code
+                Some("Failed to acquire lock on connection".to_string()),
+            )
+        })?;
         conn.execute("COMMIT", [])?;
         *committed = true;
+        drop(conn);
+        drop(committed);
         Ok(())
     }
 
     fn rollback(self) -> Result<(), Self::Error> {
-        let mut committed = self.committed.lock().unwrap();
+        let mut committed = self.committed.lock().map_err(|_| {
+            duckdb::Error::DuckDBFailure(
+                ffi::Error::new(1), // Generic error code
+                Some("Failed to acquire lock on committed flag".to_string()),
+            )
+        })?;
         if *committed {
             return Ok(());
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| {
+            duckdb::Error::DuckDBFailure(
+                ffi::Error::new(1), // Generic error code
+                Some("Failed to acquire lock on connection".to_string()),
+            )
+        })?;
         conn.execute("ROLLBACK", [])?;
         *committed = true;
+        drop(conn);
+        drop(committed);
         Ok(())
     }
 }
 
 impl Drop for DuckDbTransaction {
     fn drop(&mut self) {
-        let committed = self.committed.lock().unwrap();
-        if !*committed {
-            // Rollback if not explicitly committed
-            if let Ok(conn) = self.conn.lock() {
-                let _ = conn.execute("ROLLBACK", []);
+        if let Ok(committed) = self.committed.lock() {
+            if !*committed {
+                // Rollback if not explicitly committed
+                if let Ok(conn) = self.conn.lock() {
+                    let _ = conn.execute("ROLLBACK", []);
+                }
             }
         }
     }
