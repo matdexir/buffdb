@@ -83,6 +83,8 @@ criterion = { version = "0.5.1", features = ["async_tokio"] }
 rand = "0.8.5"
 serial_test = "3.1.1"
 tokio = "1"
+chrono = { version = "0.4", features = ["serde"] }
+tokio-stream = "0.1"
 
 [lints.rust]
 ambiguous-glob-reexports = "deny"
