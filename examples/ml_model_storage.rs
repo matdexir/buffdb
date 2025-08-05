@@ -13,7 +13,6 @@ use buffdb::{
         kv::{GetRequest, SetRequest},
     },
 };
-use std::collections::HashMap;
 use std::time::Instant;
 use tokio_stream::StreamExt;
 
@@ -101,24 +100,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let mut response = remote_kv.get(request).await?.into_inner();
                 if let Some(result) = response.next().await {
-                    let blob_id = result?.value;
+                    let blob_id = result?.value.parse::<u64>()?;
 
                     // Download the blob
                     let start = Instant::now();
                     let request = tonic::Request::new(tokio_stream::once(BlobGetRequest {
-                        id: blob_id.clone(),
+                        id: blob_id,
                         transaction_id: None,
                     }));
 
                     let mut blob_response = remote_blob.get(request).await?.into_inner();
                     let mut model_data = Vec::new();
-                    let mut metadata = HashMap::new();
+                    let mut metadata = None;
 
                     while let Some(chunk) = blob_response.next().await {
                         let chunk = chunk?;
                         model_data.extend(&chunk.bytes);
                         if let Some(chunk_metadata) = chunk.metadata {
-                            metadata = chunk_metadata;
+                            metadata = Some(chunk_metadata);
                         }
                     }
 
@@ -134,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("   → Caching model locally...");
                     let request = tonic::Request::new(tokio_stream::once(StoreRequest {
                         bytes: model_data,
-                        metadata: Some(metadata),
+                        metadata,
                         transaction_id: None,
                     }));
 
@@ -145,7 +144,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Update local metadata
                         let updates = vec![
                             (remote_version_key, remote_version),
-                            (format!("model:{}:blob_id", model_id), local_blob_id),
+                            (
+                                format!("model:{}:blob_id", model_id),
+                                local_blob_id.to_string(),
+                            ),
                             (
                                 format!("model:{}:last_sync", model_id),
                                 chrono::Utc::now().to_rfc3339(),
@@ -158,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 value,
                                 transaction_id: None,
                             }));
-                            local_kv.set(request).await?;
+                            let _ = local_kv.set(request).await?;
                         }
 
                         println!("   ✓ Model cached successfully");
@@ -182,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut response = local_kv.get(request).await?.into_inner();
     if let Some(result) = response.next().await {
-        let blob_id = result?.value;
+        let blob_id = result?.value.parse::<u64>()?;
 
         let start = Instant::now();
         let request = tonic::Request::new(tokio_stream::once(BlobGetRequest {
@@ -223,9 +225,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             transaction_id: None,
         }));
 
-        let mut response = local_kv.get(request).await;
+        let response = local_kv.get(request).await;
         match response {
-            Ok(mut stream) => {
+            Ok(stream) => {
                 if let Some(Ok(result)) = stream.into_inner().next().await {
                     println!("   {} = {}", key, result.value);
                 }
