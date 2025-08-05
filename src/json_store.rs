@@ -223,7 +223,7 @@ impl JsonPath {
                         JsonStoreError::InvalidJsonPath("Expected object".to_string())
                     })?;
                     if !obj.contains_key(field) || !obj[field].is_array() {
-                        let _ = obj.insert(field.to_string(), Value::Array(Vec::new()));
+                        drop(obj.insert(field.to_string(), Value::Array(Vec::new())));
                     }
                 }
 
@@ -268,10 +268,10 @@ impl JsonPath {
                     JsonStoreError::InvalidJsonPath("Expected object".to_string())
                 })?;
                 if !obj.contains_key(&part.to_string()) {
-                    let _ = obj.insert(part.to_string(), Value::Object(Map::new()));
+                    drop(obj.insert(part.to_string(), Value::Object(Map::new())));
                 }
                 current = obj.get_mut(&part.to_string()).ok_or_else(|| {
-                    JsonStoreError::InvalidJsonPath(format!("Field '{}' not found", part))
+                    JsonStoreError::InvalidJsonPath(format!("Field '{part}' not found"))
                 })?;
             }
         }
@@ -298,7 +298,7 @@ impl JsonPath {
                     JsonStoreError::InvalidJsonPath("Expected object".to_string())
                 })?;
                 if !obj.contains_key(field) || !obj[field].is_array() {
-                    let _ = obj.insert(field.to_string(), Value::Array(Vec::new()));
+                    drop(obj.insert(field.to_string(), Value::Array(Vec::new())));
                 }
             }
 
@@ -326,7 +326,7 @@ impl JsonPath {
             let obj = current
                 .as_object_mut()
                 .ok_or_else(|| JsonStoreError::InvalidJsonPath("Expected object".to_string()))?;
-            let _ = obj.insert(final_key.to_string(), new_value);
+            drop(obj.insert(final_key.to_string(), new_value));
         }
 
         Ok(())

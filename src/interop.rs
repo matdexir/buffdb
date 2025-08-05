@@ -1,7 +1,7 @@
 //! Interoperability helpers for third-party to third-party conversions.
 
 use crate::conv::Unsupported;
-#[cfg(any(feature = "duckdb", feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 use std::sync::Arc;
 use tonic::Status;
 
@@ -17,7 +17,8 @@ pub trait IntoTonicStatus {
     fn into_tonic_status(self) -> Status;
 }
 
-#[cfg(feature = "duckdb")]
+/*
+// #[cfg(feature = "duckdb")] // Temporarily disabled
 impl IntoTonicStatus for duckdb::Error {
     fn into_tonic_status(self) -> Status {
         let mut tonic_err = match &self {
@@ -66,6 +67,7 @@ impl IntoTonicStatus for duckdb::Error {
         tonic_err
     }
 }
+*/
 
 #[cfg(feature = "sqlite")]
 impl IntoTonicStatus for rusqlite::Error {

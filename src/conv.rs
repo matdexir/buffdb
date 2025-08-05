@@ -1,12 +1,12 @@
-#[cfg(any(feature = "duckdb", feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 use prost::{Message, Name};
-#[cfg(feature = "duckdb")]
-use prost_types::value::Kind;
+// #[cfg(feature = "duckdb")] // Temporarily disabled
+// use prost_types::value::Kind;
 use prost_types::*;
-#[cfg(feature = "duckdb")]
-use std::collections::BTreeMap;
+// #[cfg(feature = "duckdb")] // Temporarily disabled
+// use std::collections::BTreeMap;
 
-#[cfg(any(feature = "duckdb", feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 pub(crate) fn try_into_protobuf_any<T>(value: T) -> Result<Any, Unsupported>
 where
     T: TryIntoProtobufAny,
@@ -14,7 +14,7 @@ where
     value.try_into_protobuf_any()
 }
 
-#[cfg(any(feature = "duckdb", feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 pub(crate) trait TryIntoProtobufAny {
     fn try_into_protobuf_any(self) -> Result<Any, Unsupported>;
 }
@@ -49,7 +49,7 @@ enum ConcreteValue {
 }
 
 impl ConcreteValue {
-    #[cfg(any(feature = "duckdb", feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     fn into_any(self) -> Any {
         macro_rules! google_proto {
             ($file:literal) => {
@@ -84,7 +84,8 @@ impl ConcreteValue {
     }
 }
 
-#[cfg(feature = "duckdb")]
+/*
+// #[cfg(feature = "duckdb")] // Temporarily disabled
 impl TryIntoProtobufAny for duckdb::types::Value {
     fn try_into_protobuf_any(self) -> Result<Any, Unsupported> {
         Ok(match self {
@@ -180,8 +181,10 @@ impl TryIntoProtobufAny for duckdb::types::Value {
         .into_any())
     }
 }
+*/
 
-#[cfg(feature = "duckdb")]
+/*
+// #[cfg(feature = "duckdb")] // Temporarily disabled
 fn duckdb_value_to_protobuf_value(value: &duckdb::types::Value) -> Result<Value, Unsupported> {
     use duckdb::types::Value as DuckdbValue;
     match value {
@@ -278,6 +281,7 @@ fn duckdb_value_to_protobuf_value(value: &duckdb::types::Value) -> Result<Value,
         DuckdbValue::Union(val) => duckdb_value_to_protobuf_value(val),
     }
 }
+*/
 
 #[cfg(feature = "sqlite")]
 impl TryIntoProtobufAny for rusqlite::types::Value {

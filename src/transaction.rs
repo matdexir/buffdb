@@ -66,7 +66,7 @@ where
 
         match self.transactions.lock() {
             Ok(mut transactions) => {
-                let _ = transactions.insert(transaction_id.clone(), transaction);
+                drop(transactions.insert(transaction_id.clone(), transaction));
             }
             Err(_) => {
                 // Can't return error here since we can't construct Backend::Error

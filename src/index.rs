@@ -165,7 +165,7 @@ impl SecondaryIndex {
                 if let Some(keys) = index.get_mut(value) {
                     let _ = keys.remove(key);
                     if keys.is_empty() {
-                        let _ = index.remove(value);
+                        drop(index.remove(value));
                     }
                 }
             }
@@ -179,7 +179,7 @@ impl SecondaryIndex {
                 if let Some(keys) = index.get_mut(value) {
                     let _ = keys.remove(key);
                     if keys.is_empty() {
-                        let _ = index.remove(value);
+                        drop(index.remove(value));
                     }
                 }
             }
@@ -222,18 +222,18 @@ impl SecondaryIndex {
     ) -> Result<HashSet<String>, IndexError> {
         match self.config.index_type {
             IndexType::BTree => {
-                let index =
-                    self.btree_index
-                        .read()
-                        .map_err(|_| IndexError::IndexAlreadyExists {
-                            name: "lock poisoned".to_string(),
-                        })?;
                 let mut result = HashSet::new();
-
-                for (_, keys) in index.range(start.clone()..=end.clone()) {
-                    result.extend(keys.iter().cloned());
+                {
+                    let index =
+                        self.btree_index
+                            .read()
+                            .map_err(|_| IndexError::IndexAlreadyExists {
+                                name: "lock poisoned".to_string(),
+                            })?;
+                    for (_, keys) in index.range(start.clone()..=end.clone()) {
+                        result.extend(keys.iter().cloned());
+                    }
                 }
-
                 Ok(result)
             }
             _ => Err(IndexError::OperationNotSupported {
@@ -277,7 +277,8 @@ impl IndexManager {
             return Err(IndexError::IndexAlreadyExists { name: config.name });
         }
 
-        let _ = indexes.insert(config.name.clone(), SecondaryIndex::new(config));
+        drop(indexes.insert(config.name.clone(), SecondaryIndex::new(config)));
+        drop(indexes);
         Ok(())
     }
 
@@ -295,7 +296,7 @@ impl IndexManager {
                 name: name.to_string(),
             });
         }
-
+        drop(indexes);
         Ok(())
     }
 
