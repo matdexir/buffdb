@@ -13,7 +13,6 @@
 //! 2. Implement a non-streaming backend specifically for internal use
 //! 3. Refactor the entire module to work with streaming natively
 
-use crate::fts::FtsManager;
 use crate::index::{IndexConfig, IndexManager, IndexType};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -72,7 +71,6 @@ pub struct JsonDocument {
 pub struct JsonStore<Backend> {
     _backend: std::marker::PhantomData<Backend>,
     index_manager: Arc<IndexManager>,
-    fts_manager: Arc<FtsManager>,
     collection: String,
 }
 
@@ -82,7 +80,6 @@ impl<Backend> JsonStore<Backend> {
         Self {
             _backend: std::marker::PhantomData,
             index_manager: Arc::new(IndexManager::new()),
-            fts_manager: Arc::new(FtsManager::new()),
             collection,
         }
     }
@@ -103,20 +100,6 @@ impl<Backend> JsonStore<Backend> {
         };
 
         self.index_manager.create_index(config)
-    }
-
-    /// Create a full-text search index on a JSON path
-    pub fn create_fts_index(
-        &self,
-        name: String,
-        _json_path: String,
-    ) -> Result<(), crate::index::IndexError> {
-        let index_name = format!("{}_{}", self.collection, name);
-        self.fts_manager.create_index(index_name)?;
-
-        // Store the JSON path mapping
-        // In a real implementation, we'd store this persistently
-        Ok(())
     }
 
     /// Generate document key

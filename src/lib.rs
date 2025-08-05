@@ -28,15 +28,13 @@
 pub mod backend;
 mod blob;
 mod conv;
-#[cfg(feature = "duckdb")]
-mod duckdb_helper;
-pub mod fts;
+// #[cfg(feature = "duckdb")]
+// mod duckdb_helper;
 pub mod index;
 pub mod interop;
 pub mod json_store;
 mod kv;
 mod location;
-pub mod mvcc;
 mod query;
 pub mod queryable;
 mod tracing_shim;

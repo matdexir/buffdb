@@ -35,15 +35,15 @@ path = "benches/main.rs"
 harness = false
 
 [features]
-default = ["vendored-duckdb", "vendored-sqlite"]
+default = ["vendored-sqlite"] # DuckDB temporarily disabled until stabilized
 binary = [
     "dep:clap",
     "dep:tracing-subscriber", # no way to make this contingent on tracing also being enabled
 ]
-duckdb = ["dep:duckdb"]
+# duckdb = ["dep:duckdb"] # Temporarily disabled until stabilized
 sqlite = ["dep:rusqlite"]
 tracing = ["dep:tracing", "dep:tracing-futures"]
-vendored-duckdb = ["duckdb", "duckdb/bundled"]
+# vendored-duckdb = ["duckdb", "duckdb/bundled"] # Temporarily disabled until stabilized
 vendored-sqlite = ["sqlite", "rusqlite/bundled"]
 
 [dependencies]
@@ -51,7 +51,7 @@ async-stream = "0.3.5"
 async-trait = "0.1.81"
 clap = { version = "4.5.10", features = ["derive"], optional = true }
 crossbeam = "0.8.4"
-duckdb = { version = "1.0.0", optional = true }
+# duckdb = { version = "1.0.0", optional = true } # Temporarily disabled until stabilized
 futures = "0.3.30"
 hyper-util = "0.1.6"
 prost = "0.13.1"
