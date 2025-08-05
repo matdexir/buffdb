@@ -68,6 +68,7 @@ pub struct JsonDocument {
 /// JSON document store - temporarily disabled
 ///
 /// This struct is kept for API compatibility but all methods return NotImplemented error
+#[derive(Debug)]
 pub struct JsonStore<Backend> {
     _backend: std::marker::PhantomData<Backend>,
     index_manager: Arc<IndexManager>,
@@ -116,6 +117,8 @@ impl<Backend> JsonStore<Backend> {
 }
 
 /// JSONPath query evaluation
+/// JSONPath query and manipulation utilities
+#[derive(Debug, Copy, Clone)]
 pub struct JsonPath;
 
 impl JsonPath {
@@ -139,7 +142,9 @@ impl JsonPath {
             for value in current {
                 if part.ends_with(']') {
                     // Array access
-                    let (field, index_str) = part.split_once('[').unwrap();
+                    let (field, index_str) = part.split_once('[').ok_or_else(|| {
+                        JsonStoreError::InvalidJsonPath("Invalid array access syntax".to_string())
+                    })?;
                     let index_str = index_str.trim_end_matches(']');
 
                     if let Some(obj) = value.get(field) {
@@ -199,9 +204,13 @@ impl JsonPath {
         for part in target_path {
             if part.ends_with(']') {
                 // Array access
-                let (field, index_str) = part.split_once('[').unwrap();
+                let (field, index_str) = part.split_once('[').ok_or_else(|| {
+                    JsonStoreError::InvalidJsonPath("Invalid array access syntax".to_string())
+                })?;
                 let index_str = index_str.trim_end_matches(']');
-                let index: usize = index_str.parse().unwrap();
+                let index: usize = index_str.parse().map_err(|_| {
+                    JsonStoreError::InvalidJsonPath("Invalid array index".to_string())
+                })?;
 
                 // Ensure we have an object to work with
                 if !current.is_object() {
@@ -210,16 +219,28 @@ impl JsonPath {
 
                 // Ensure field exists and is an array
                 {
-                    let obj = current.as_object_mut().unwrap();
+                    let obj = current.as_object_mut().ok_or_else(|| {
+                        JsonStoreError::InvalidJsonPath("Expected object".to_string())
+                    })?;
                     if !obj.contains_key(field) || !obj[field].is_array() {
-                        obj.insert(field.to_string(), Value::Array(Vec::new()));
+                        let _ = obj.insert(field.to_string(), Value::Array(Vec::new()));
                     }
                 }
 
                 // Now work with the array
                 {
-                    let obj = current.as_object_mut().unwrap();
-                    let arr = obj.get_mut(field).unwrap().as_array_mut().unwrap();
+                    let obj = current.as_object_mut().ok_or_else(|| {
+                        JsonStoreError::InvalidJsonPath("Expected object".to_string())
+                    })?;
+                    let arr = obj
+                        .get_mut(field)
+                        .ok_or_else(|| {
+                            JsonStoreError::InvalidJsonPath("Field not found".to_string())
+                        })?
+                        .as_array_mut()
+                        .ok_or_else(|| {
+                            JsonStoreError::InvalidJsonPath("Expected array".to_string())
+                        })?;
 
                     // Extend array if needed
                     while arr.len() <= index {
@@ -230,31 +251,41 @@ impl JsonPath {
                 // Move to the array element
                 current = current
                     .get_mut(field)
-                    .unwrap()
+                    .ok_or_else(|| JsonStoreError::InvalidJsonPath("Field not found".to_string()))?
                     .as_array_mut()
-                    .unwrap()
+                    .ok_or_else(|| JsonStoreError::InvalidJsonPath("Expected array".to_string()))?
                     .get_mut(index)
-                    .unwrap();
+                    .ok_or_else(|| {
+                        JsonStoreError::InvalidJsonPath("Index out of bounds".to_string())
+                    })?;
             } else {
                 // Object field access
                 if !current.is_object() {
                     *current = Value::Object(Map::new());
                 }
 
-                let obj = current.as_object_mut().unwrap();
+                let obj = current.as_object_mut().ok_or_else(|| {
+                    JsonStoreError::InvalidJsonPath("Expected object".to_string())
+                })?;
                 if !obj.contains_key(&part.to_string()) {
-                    obj.insert(part.to_string(), Value::Object(Map::new()));
+                    let _ = obj.insert(part.to_string(), Value::Object(Map::new()));
                 }
-                current = obj.get_mut(&part.to_string()).unwrap();
+                current = obj.get_mut(&part.to_string()).ok_or_else(|| {
+                    JsonStoreError::InvalidJsonPath(format!("Field '{}' not found", part))
+                })?;
             }
         }
 
         // Set the final value
         if final_key.ends_with(']') {
             // Array access
-            let (field, index_str) = final_key.split_once('[').unwrap();
+            let (field, index_str) = final_key.split_once('[').ok_or_else(|| {
+                JsonStoreError::InvalidJsonPath("Invalid array access syntax".to_string())
+            })?;
             let index_str = index_str.trim_end_matches(']');
-            let index: usize = index_str.parse().unwrap();
+            let index: usize = index_str
+                .parse()
+                .map_err(|_| JsonStoreError::InvalidJsonPath("Invalid array index".to_string()))?;
 
             // Ensure we have an object to work with
             if !current.is_object() {
@@ -263,15 +294,23 @@ impl JsonPath {
 
             // Ensure field exists and is an array
             {
-                let obj = current.as_object_mut().unwrap();
+                let obj = current.as_object_mut().ok_or_else(|| {
+                    JsonStoreError::InvalidJsonPath("Expected object".to_string())
+                })?;
                 if !obj.contains_key(field) || !obj[field].is_array() {
-                    obj.insert(field.to_string(), Value::Array(Vec::new()));
+                    let _ = obj.insert(field.to_string(), Value::Array(Vec::new()));
                 }
             }
 
             // Set the value in the array
-            let obj = current.as_object_mut().unwrap();
-            let arr = obj.get_mut(field).unwrap().as_array_mut().unwrap();
+            let obj = current
+                .as_object_mut()
+                .ok_or_else(|| JsonStoreError::InvalidJsonPath("Expected object".to_string()))?;
+            let arr = obj
+                .get_mut(field)
+                .ok_or_else(|| JsonStoreError::InvalidJsonPath("Field not found".to_string()))?
+                .as_array_mut()
+                .ok_or_else(|| JsonStoreError::InvalidJsonPath("Expected array".to_string()))?;
 
             // Extend array if needed
             while arr.len() <= index {
@@ -284,8 +323,10 @@ impl JsonPath {
                 *current = Value::Object(Map::new());
             }
 
-            let obj = current.as_object_mut().unwrap();
-            obj.insert(final_key.to_string(), new_value);
+            let obj = current
+                .as_object_mut()
+                .ok_or_else(|| JsonStoreError::InvalidJsonPath("Expected object".to_string()))?;
+            let _ = obj.insert(final_key.to_string(), new_value);
         }
 
         Ok(())

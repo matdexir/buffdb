@@ -45,7 +45,7 @@ impl Transaction for SqliteTransaction {
                 Some("Failed to acquire lock on connection".to_string()),
             )
         })?;
-        conn.execute("COMMIT", [])?;
+        let _ = conn.execute("COMMIT", [])?;
         *committed = true;
         drop(conn);
         drop(committed);
@@ -69,7 +69,7 @@ impl Transaction for SqliteTransaction {
                 Some("Failed to acquire lock on connection".to_string()),
             )
         })?;
-        conn.execute("ROLLBACK", [])?;
+        let _ = conn.execute("ROLLBACK", [])?;
         *committed = true;
         drop(conn);
         drop(committed);
@@ -83,7 +83,7 @@ impl Drop for SqliteTransaction {
             if !*committed {
                 // Rollback if not explicitly committed
                 if let Ok(conn) = self.conn.lock() {
-                    let _ = conn.execute("ROLLBACK", []);
+                    drop(conn.execute("ROLLBACK", []));
                 }
             }
         }
@@ -95,13 +95,13 @@ impl TransactionalBackend for Sqlite {
 
     fn begin_transaction(&self) -> Result<Self::Transaction, Self::Error> {
         let conn = self.connect_kv()?;
-        conn.execute("BEGIN IMMEDIATE", [])?;
+        let _ = conn.execute("BEGIN IMMEDIATE", [])?;
         Ok(SqliteTransaction::new(conn))
     }
 
     fn begin_read_transaction(&self) -> Result<Self::Transaction, Self::Error> {
         let conn = self.connect_kv()?;
-        conn.execute("BEGIN", [])?;
+        let _ = conn.execute("BEGIN", [])?;
         Ok(SqliteTransaction::new(conn))
     }
 }

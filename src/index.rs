@@ -102,36 +102,46 @@ impl SecondaryIndex {
     pub fn insert(&self, key: &str, value: IndexValue) -> Result<(), IndexError> {
         match self.config.index_type {
             IndexType::Hash => {
-                let mut index = self.hash_index.write().unwrap();
+                let mut index =
+                    self.hash_index
+                        .write()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
 
                 if self.config.unique {
                     if let Some(existing_keys) = index.get(&value) {
                         if !existing_keys.is_empty() && !existing_keys.contains(&key.to_string()) {
                             return Err(IndexError::UniqueConstraintViolation {
                                 index: self.config.name.clone(),
-                                value: format!("{:?}", value),
+                                value: format!("{value:?}"),
                             });
                         }
                     }
                 }
 
-                index.entry(value).or_default().insert(key.to_string());
+                let _ = index.entry(value).or_default().insert(key.to_string());
             }
             IndexType::BTree => {
-                let mut index = self.btree_index.write().unwrap();
+                let mut index =
+                    self.btree_index
+                        .write()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
 
                 if self.config.unique {
                     if let Some(existing_keys) = index.get(&value) {
                         if !existing_keys.is_empty() && !existing_keys.contains(&key.to_string()) {
                             return Err(IndexError::UniqueConstraintViolation {
                                 index: self.config.name.clone(),
-                                value: format!("{:?}", value),
+                                value: format!("{value:?}"),
                             });
                         }
                     }
                 }
 
-                index.entry(value).or_default().insert(key.to_string());
+                let _ = index.entry(value).or_default().insert(key.to_string());
             }
             _ => {
                 // TODO: Implement other index types
@@ -146,20 +156,30 @@ impl SecondaryIndex {
     pub fn remove(&self, key: &str, value: &IndexValue) -> Result<(), IndexError> {
         match self.config.index_type {
             IndexType::Hash => {
-                let mut index = self.hash_index.write().unwrap();
+                let mut index =
+                    self.hash_index
+                        .write()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
                 if let Some(keys) = index.get_mut(value) {
-                    keys.remove(key);
+                    let _ = keys.remove(key);
                     if keys.is_empty() {
-                        index.remove(value);
+                        let _ = index.remove(value);
                     }
                 }
             }
             IndexType::BTree => {
-                let mut index = self.btree_index.write().unwrap();
+                let mut index =
+                    self.btree_index
+                        .write()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
                 if let Some(keys) = index.get_mut(value) {
-                    keys.remove(key);
+                    let _ = keys.remove(key);
                     if keys.is_empty() {
-                        index.remove(value);
+                        let _ = index.remove(value);
                     }
                 }
             }
@@ -173,11 +193,21 @@ impl SecondaryIndex {
     pub fn find_exact(&self, value: &IndexValue) -> Result<HashSet<String>, IndexError> {
         match self.config.index_type {
             IndexType::Hash => {
-                let index = self.hash_index.read().unwrap();
+                let index = self
+                    .hash_index
+                    .read()
+                    .map_err(|_| IndexError::IndexAlreadyExists {
+                        name: "lock poisoned".to_string(),
+                    })?;
                 Ok(index.get(value).cloned().unwrap_or_default())
             }
             IndexType::BTree => {
-                let index = self.btree_index.read().unwrap();
+                let index =
+                    self.btree_index
+                        .read()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
                 Ok(index.get(value).cloned().unwrap_or_default())
             }
             _ => Err(IndexError::UnsupportedIndexType),
@@ -192,7 +222,12 @@ impl SecondaryIndex {
     ) -> Result<HashSet<String>, IndexError> {
         match self.config.index_type {
             IndexType::BTree => {
-                let index = self.btree_index.read().unwrap();
+                let index =
+                    self.btree_index
+                        .read()
+                        .map_err(|_| IndexError::IndexAlreadyExists {
+                            name: "lock poisoned".to_string(),
+                        })?;
                 let mut result = HashSet::new();
 
                 for (_, keys) in index.range(start.clone()..=end.clone()) {
@@ -215,6 +250,12 @@ pub struct IndexManager {
     indexes: Arc<RwLock<HashMap<String, SecondaryIndex>>>,
 }
 
+impl Default for IndexManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IndexManager {
     /// Create a new index manager
     pub fn new() -> Self {
@@ -225,21 +266,29 @@ impl IndexManager {
 
     /// Create a new index
     pub fn create_index(&self, config: IndexConfig) -> Result<(), IndexError> {
-        let mut indexes = self.indexes.write().unwrap();
+        let mut indexes = self
+            .indexes
+            .write()
+            .map_err(|_| IndexError::IndexAlreadyExists {
+                name: "lock poisoned".to_string(),
+            })?;
 
         if indexes.contains_key(&config.name) {
-            return Err(IndexError::IndexAlreadyExists {
-                name: config.name.clone(),
-            });
+            return Err(IndexError::IndexAlreadyExists { name: config.name });
         }
 
-        indexes.insert(config.name.clone(), SecondaryIndex::new(config));
+        let _ = indexes.insert(config.name.clone(), SecondaryIndex::new(config));
         Ok(())
     }
 
     /// Drop an index
     pub fn drop_index(&self, name: &str) -> Result<(), IndexError> {
-        let mut indexes = self.indexes.write().unwrap();
+        let mut indexes = self
+            .indexes
+            .write()
+            .map_err(|_| IndexError::IndexAlreadyExists {
+                name: "lock poisoned".to_string(),
+            })?;
 
         if indexes.remove(name).is_none() {
             return Err(IndexError::IndexNotFound {
@@ -252,7 +301,7 @@ impl IndexManager {
 
     /// Get an index by name
     pub fn get_index(&self, name: &str) -> Option<SecondaryIndex> {
-        let indexes = self.indexes.read().unwrap();
+        let indexes = self.indexes.read().ok()?;
         indexes.get(name).map(|idx| SecondaryIndex {
             config: idx.config.clone(),
             hash_index: Arc::clone(&idx.hash_index),
@@ -267,7 +316,12 @@ impl IndexManager {
         old_value: Option<&str>,
         new_value: &str,
     ) -> Result<(), IndexError> {
-        let indexes = self.indexes.read().unwrap();
+        let indexes = self
+            .indexes
+            .read()
+            .map_err(|_| IndexError::IndexAlreadyExists {
+                name: "lock poisoned".to_string(),
+            })?;
 
         for (_, index) in indexes.iter() {
             // Remove old value from index if it exists
@@ -286,7 +340,12 @@ impl IndexManager {
 
     /// Remove a key from all indexes
     pub fn remove_from_indexes(&self, key: &str, value: &str) -> Result<(), IndexError> {
-        let indexes = self.indexes.read().unwrap();
+        let indexes = self
+            .indexes
+            .read()
+            .map_err(|_| IndexError::IndexAlreadyExists {
+                name: "lock poisoned".to_string(),
+            })?;
 
         for (_, index) in indexes.iter() {
             let index_value = IndexValue::String(value.to_string());

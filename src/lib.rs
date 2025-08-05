@@ -38,6 +38,7 @@ mod location;
 mod query;
 pub mod queryable;
 mod tracing_shim;
+/// Transaction support for database backends
 pub mod transaction;
 pub mod transitive;
 

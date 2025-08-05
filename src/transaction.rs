@@ -66,7 +66,7 @@ where
 
         match self.transactions.lock() {
             Ok(mut transactions) => {
-                transactions.insert(transaction_id.clone(), transaction);
+                let _ = transactions.insert(transaction_id.clone(), transaction);
             }
             Err(_) => {
                 // Can't return error here since we can't construct Backend::Error
@@ -93,7 +93,7 @@ where
         if let Some(transaction) = self.take_transaction(transaction_id) {
             transaction
                 .commit()
-                .map_err(|e| format!("Failed to commit transaction: {}", e))
+                .map_err(|e| format!("Failed to commit transaction: {e}"))
         } else {
             Err("Transaction not found".to_string())
         }
@@ -104,7 +104,7 @@ where
         if let Some(transaction) = self.take_transaction(transaction_id) {
             transaction
                 .rollback()
-                .map_err(|e| format!("Failed to rollback transaction: {}", e))
+                .map_err(|e| format!("Failed to rollback transaction: {e}"))
         } else {
             Err("Transaction not found".to_string())
         }
@@ -114,17 +114,22 @@ where
     pub fn has_transaction(&self, transaction_id: &str) -> bool {
         self.transactions
             .lock()
-            .unwrap()
-            .contains_key(transaction_id)
+            .ok()
+            .map(|guard| guard.contains_key(transaction_id))
+            .unwrap_or(false)
     }
 
     /// Get the number of active transactions
     pub fn active_transaction_count(&self) -> usize {
-        self.transactions.lock().unwrap().len()
+        self.transactions
+            .lock()
+            .ok()
+            .map(|guard| guard.len())
+            .unwrap_or(0)
     }
 
     /// Clean up expired transactions
-    pub fn cleanup_expired(&self) {
+    pub const fn cleanup_expired(&self) {
         // TODO: Implement cleanup based on timeouts
     }
 }

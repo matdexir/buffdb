@@ -77,7 +77,7 @@ where
     }
 
     /// Get the index manager
-    pub fn index_manager(&self) -> &Arc<IndexManager> {
+    pub const fn index_manager(&self) -> &Arc<IndexManager> {
         &self.index_manager
     }
 }
