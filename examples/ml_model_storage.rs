@@ -160,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 value,
                                 transaction_id: None,
                             }));
-                            let _ = local_kv.set(request).await?;
+                            drop(local_kv.set(request).await?);
                         }
 
                         println!("   ✓ Model cached successfully");
