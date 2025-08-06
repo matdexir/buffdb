@@ -11,14 +11,14 @@ BuffDB is a lightweight, high-performance embedded database with networking capa
 
 ## ✨ Key Features
 
-- 🚀 **High Performance** - Optimized for speed with multiple backend options
+- 🚀 **High Performance** - Optimized for speed with SQLite backend
 - 🌐 **gRPC Network API** - Access your database over the network
-- 🔄 **Transactions** - ACID compliance with isolation levels
-- 🔍 **Full-Text Search** - Built-in FTS with BM25 ranking
-- 📊 **Secondary Indexes** - B-tree and hash indexes for fast queries
-- 📄 **JSON Documents** - Document store with JSONPath queries
-- 🔐 **MVCC** - Multi-version concurrency control for better performance
+- 🔑 **Key-Value Store** - Fast key-value operations with streaming support
+- 📦 **BLOB Storage** - Binary large object storage with metadata
+- 📊 **Secondary Indexes** - Hash and B-tree indexes for value-based queries
+- 🔍 **Raw SQL Queries** - Execute SQL directly on the underlying database
 - 📦 **Tiny Size** - Under 2MB binary with SQLite backend
+- 🦀 **Pure Rust** - Safe, concurrent, and memory-efficient
 
 ## 🚀 Quick Start
 
@@ -88,23 +88,35 @@ cargo run --features sqlite -- run
 <summary><b>🦀 Rust</b></summary>
 
 ```rust
-use buffdb::{Connection, proto::kv::*};
-use tokio_stream::StreamExt;
+use buffdb::client::kv::KvClient;
+use buffdb::proto::kv::*;
+use tonic::transport::Channel;
+use futures::stream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Connect to BuffDB
-    let mut client = Connection::connect("http://[::1]:9313").await?;
+    let channel = Channel::from_static("http://[::1]:9313").connect().await?;
+    let mut client = KvClient::new(channel);
     
-    // Simple key-value operations
-    client.kv_set("user:1", "Alice").await?;
-    let value = client.kv_get("user:1").await?;
-    println!("Value: {}", value.unwrap());
+    // Set a key-value pair
+    let set_request = stream::iter(vec![SetRequest {
+        key: "user:1".to_string(),
+        value: "Alice".to_string(),
+        transaction_id: None,
+    }]);
+    client.set(set_request).await?;
     
-    // Use transactions
-    let tx_id = client.begin_transaction().await?;
-    client.kv_set_tx("counter", "100", &tx_id).await?;
-    client.commit_transaction(&tx_id).await?;
+    // Get a value
+    let get_request = stream::iter(vec![GetRequest {
+        key: "user:1".to_string(),
+        transaction_id: None,
+    }]);
+    let mut response = client.get(get_request).await?.into_inner();
+    
+    while let Some(result) = response.message().await? {
+        println!("Value: {}", result.value);
+    }
     
     Ok(())
 }
@@ -113,8 +125,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Add to `Cargo.toml`:
 ```toml
 [dependencies]
-buffdb = "0.4"
+buffdb = "0.5"
 tokio = { version = "1", features = ["full"] }
+tonic = "0.12"
+futures = "0.3"
 ```
 </details>
 
@@ -309,50 +323,54 @@ cargo build --release
 
 ## 📚 Advanced Features
 
-### Transactions
-
-**Note**: Transaction support over gRPC is deprecated. For ACID guarantees, use one of these approaches:
-
-1. **Batch Operations** (recommended) - Send multiple operations in a single request
-2. **Client-Side Transactions** - Manage your own database connection
-3. **Session-Based API** (future) - Long-lived connections with transaction support
-
-The underlying SQLite and DuckDB backends fully support transactions when accessed directly.
-
 ### Secondary Indexes
+
+BuffDB supports creating secondary indexes on values for efficient lookups:
+
 ```rust
-// Create index
-store.create_index(IndexConfig {
+use buffdb::index::{IndexConfig, IndexManager, IndexType};
+
+// Create an index manager
+let index_manager = IndexManager::new();
+
+// Create a hash index for exact matches
+index_manager.create_index(IndexConfig {
     name: "email_idx".to_string(),
     index_type: IndexType::Hash,
     unique: true,
     filter: None,
 })?;
 
-// Query using index (automatic on KV operations)
+// Create a B-tree index for range queries
+index_manager.create_index(IndexConfig {
+    name: "age_idx".to_string(),  
+    index_type: IndexType::BTree,
+    unique: false,
+    filter: None,
+})?;
 ```
 
-### Full-Text Search
-```rust
-// Create FTS index
-let fts = FtsIndex::new("articles".to_string());
-fts.index_document("doc1", "Search content here")?;
+### Raw SQL Queries
 
-// Search
-let results = fts.search("content", 10);
+Execute SQL directly on the underlying SQLite database:
+
+```bash
+# Via CLI
+buffdb query "SELECT * FROM kv_store WHERE key LIKE 'user:%'"
+
+# Via gRPC (using the Query service)
 ```
 
-### JSON Documents
-```rust
-// Store JSON document
-let doc = json!({
-    "name": "Alice",
-    "email": "alice@example.com"
-});
-json_store.insert("user:1", doc).await?;
+### BLOB Storage
 
-// Query with JSONPath
-json_store.patch("user:1", "$.email", json!("newemail@example.com")).await?;
+Store binary data with metadata:
+
+```bash
+# Store a file
+buffdb blob store myfile.pdf "content-type=application/pdf"
+
+# Retrieve by ID
+buffdb blob get 12345 > myfile.pdf
 ```
 
 ## 🔧 Configuration
@@ -366,7 +384,7 @@ buffdb run --addr [::1]:9313 --kv-store kv.db --blob-store blob.db
 | Backend | Feature Flag | Performance | Use Case | Status |
 |---------|-------------|-------------|----------|--------|
 | SQLite | `vendored-sqlite` | Balanced | General purpose | ✅ Stable |
-| DuckDB | `vendored-duckdb` | Analytics | OLAP workloads | ⚠️ Experimental |
+| DuckDB | `duckdb` | Analytics | OLAP workloads | 🚧 Temporarily disabled |
 
 ## 🏗️ Architecture
 
