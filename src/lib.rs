@@ -24,6 +24,9 @@
 
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![allow(clippy::missing_docs_in_private_items)]
+#![allow(missing_docs)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 
 pub mod backend;
 mod blob;

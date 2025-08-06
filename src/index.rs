@@ -335,6 +335,7 @@ impl IndexManager {
             let new_index_value = IndexValue::String(new_value.to_string());
             index.insert(key, new_index_value)?;
         }
+        drop(indexes);
 
         Ok(())
     }
@@ -352,6 +353,7 @@ impl IndexManager {
             let index_value = IndexValue::String(value.to_string());
             index.remove(key, &index_value)?;
         }
+        drop(indexes);
 
         Ok(())
     }
