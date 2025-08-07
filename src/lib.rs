@@ -34,6 +34,8 @@ mod conv;
 // #[cfg(feature = "duckdb")]
 // mod duckdb_helper;
 pub mod index;
+/// Inference service for ML model serving
+pub mod inference;
 pub mod interop;
 pub mod json_store;
 mod kv;
