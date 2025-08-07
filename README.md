@@ -6,9 +6,9 @@
 
 BuffDB is a lightweight, high-performance embedded database with networking capabilities, designed for edge computing and offline-first applications. Built in Rust with <2MB binary size.
 
-**⚠️ Experimental:** Join our [Discord](https://discord.gg/4Pzv6sB8) for help. See [known issues](https://github.com/buffdb/buffdb/issues/11).
+**⚠️ Experimental:** This project is rapidly evolving. If you are trying it out and hit a roadblock, please open an [issue](https://github.com/buffdb/buffdb/issues).
 
-## ✨ Key Features
+## Key Features
 
 - **High Performance** - Optimized for speed with SQLite backend
 - **gRPC Network API** - Access your database over the network
