@@ -1,5 +1,5 @@
-// Copyright 2025 Marcus Eagan
-// Licensed under FSL-1.1-Apache-2.0
+// Copyright 2025 BuffDB
+// Licensed under the Apache License, Version 2.0
 
 //! **BuffDB is experimental software**; many things are not yet decided.
 //!

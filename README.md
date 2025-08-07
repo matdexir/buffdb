@@ -1,6 +1,6 @@
 # 🦁 BuffDB
 
-[![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/License-FSL--1.1--Apache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Tests](https://github.com/buffdb/buffdb/actions/workflows/test.yml/badge.svg)](https://github.com/buffdb/buffdb/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/discord/1267505649198305384?label=Discord&logo=discord)](https://discord.gg/4Pzv6sB8)
 [![Crates.io](https://img.shields.io/crates/v/buffdb.svg)](https://crates.io/crates/buffdb)
@@ -416,7 +416,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-FSL-1.1-Apache-2.0. See [LICENSE](LICENSE) for details.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
 ## 🔧 Backend Support
 
