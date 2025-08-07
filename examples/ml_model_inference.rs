@@ -4,10 +4,11 @@
 //! Example showing how to use BuffDB for ML model storage and retrieval
 //!
 //! This example demonstrates:
-//! - Storing ML model weights as BLOBs
+//! - Storing ML model weights as BLOBs (e.g., from Hugging Face)
 //! - Storing model metadata as KV pairs
 //! - Retrieving and listing models
 //! - Organizing models by name and version
+//! - Integration with model repositories like Hugging Face
 
 use anyhow::Result;
 use buffdb::client::{blob::BlobClient, kv::KvClient};
@@ -15,6 +16,8 @@ use buffdb::proto::{blob, kv};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tonic::transport::Channel;
+
+// Note: For downloading models directly from Hugging Face, see huggingface_integration.rs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ModelMetadata {
@@ -171,7 +174,7 @@ async fn list_models(kv_client: &mut KvClient<Channel>) -> Result<()> {
     println!("\nAvailable models:");
 
     // In a real implementation, you'd use a more sophisticated index
-    // For now, we'll list some known model names
+    // For now, we'll list some known model names (common Hugging Face models)
     let model_names = vec!["resnet50", "bert-base", "gpt2"];
 
     for name in model_names {
@@ -206,14 +209,14 @@ async fn main() -> Result<()> {
     let mut kv_client = KvClient::new(channel.clone());
     let mut blob_client = BlobClient::new(channel);
 
-    // Example 1: Store a ResNet50 model
+    // Example 1: Store a ResNet50 model (e.g., from Hugging Face)
     let resnet_metadata = ModelMetadata {
         name: "resnet50".to_string(),
         version: "1.0".to_string(),
         framework: "pytorch".to_string(),
         input_shape: vec![1, 3, 224, 224],
         output_shape: vec![1, 1000],
-        description: "ResNet50 trained on ImageNet".to_string(),
+        description: "ResNet50 trained on ImageNet (from microsoft/resnet-50)".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 
@@ -228,14 +231,14 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    // Example 2: Store a BERT model
+    // Example 2: Store a BERT model (e.g., from Hugging Face)
     let bert_metadata = ModelMetadata {
         name: "bert-base".to_string(),
         version: "2.0".to_string(),
         framework: "tensorflow".to_string(),
         input_shape: vec![1, 512],       // sequence length
         output_shape: vec![1, 512, 768], // hidden size
-        description: "BERT base model for NLP tasks".to_string(),
+        description: "BERT base model for NLP tasks (from bert-base-uncased)".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 

@@ -1,7 +1,7 @@
-//! Example demonstrating BuffDB for ML model storage and serving from buffdb.dev
+//! Example demonstrating BuffDB for ML model storage and serving with Hugging Face integration
 //!
 //! This example shows how to:
-//! 1. Connect to a remote BuffDB server (buffdb.dev) to download models
+//! 1. Connect to BuffDB to manage models downloaded from Hugging Face
 //! 2. Cache models locally for edge inference
 //! 3. Manage model versions and metadata
 //! 4. Handle offline scenarios with local cache
@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== BuffDB ML Model Edge Deployment Example ===\n");
 
     // Configuration
-    let remote_server = "https://buffdb.dev:9313"; // Your model repository
+    let remote_server = "http://[::1]:9313"; // BuffDB server managing Hugging Face models
     let local_server = "http://[::1]:9313"; // Local BuffDB instance for caching
 
     // Try to connect to remote server first
@@ -238,7 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== Example Complete ===");
     println!("\nKey benefits demonstrated:");
-    println!("- Automatic model synchronization from buffdb.dev");
+    println!("- Automatic model synchronization from Hugging Face");
     println!("- Local caching for offline operation");
     println!("- Version management to avoid unnecessary downloads");
     println!("- Fast local model loading for inference");

@@ -1509,6 +1509,40 @@ kv_client.set(stream::iter(vec![Ok(set_request)])).await?;
 
 See the [ml_model_inference example](examples/ml_model_inference.rs) for a complete implementation.
 
+### Hugging Face Integration
+
+BuffDB can be used as a caching layer for Hugging Face models, enabling efficient model distribution:
+
+```rust
+// Download model from Hugging Face and cache in BuffDB
+use reqwest::Client;
+
+async fn cache_huggingface_model(
+    model_id: &str,
+    filename: &str,
+    kv_client: &mut KvClient<Channel>,
+    blob_client: &mut BlobClient<Channel>,
+) -> Result<()> {
+    // Download from Hugging Face
+    let url = format!("https://huggingface.co/{}/resolve/main/{}", model_id, filename);
+    let model_data = Client::new().get(&url).send().await?.bytes().await?;
+    
+    // Store in BuffDB for fast local serving
+    let blob_id = store_model_blob(blob_client, model_data).await?;
+    store_model_metadata(kv_client, model_id, blob_id).await?;
+    
+    Ok(())
+}
+```
+
+**Benefits:**
+- **Reduced Latency**: Serve models from local BuffDB instead of downloading
+- **Bandwidth Savings**: Download once, serve many times
+- **Offline Support**: Models available without internet connection
+- **Version Control**: Track and serve specific model versions
+
+See the [huggingface_integration example](examples/huggingface_integration.rs) for complete implementation.
+
 ## 🔧 Configuration
 
 ### CLI Options
