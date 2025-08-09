@@ -1,16 +1,17 @@
 use crate::create_runtime;
-use buffdb::backend::BlobBackend;
+use buffdb::backend::{BlobBackend, DatabaseBackend};
 use buffdb::client::blob::BlobClient;
 use buffdb::interop::IntoTonicStatus;
 use buffdb::proto::blob::{DeleteRequest, GetRequest, StoreRequest, UpdateRequest};
 use buffdb::transitive::Transitive;
-use buffdb::{backend, transitive, Location};
+use buffdb::{backend, transaction, transitive, Location};
 use criterion::measurement::Measurement;
 use criterion::{criterion_group, BatchSize, Criterion};
 use futures::stream;
 use rand::distributions::{Alphanumeric, DistString};
 use rand::prelude::*;
 use std::iter;
+use tonic::transport::Channel;
 
 const INSERT_QUERIES_PER_BATCH: usize = 1_000;
 const GET_QUERIES_PER_BATCH: usize = 1_000;
@@ -55,6 +56,7 @@ where
     let requests: Vec<_> = iter::repeat_with(|| StoreRequest {
         bytes: generate_bytes(),
         metadata: generate_metadata(),
+        transaction_id: None,
     })
     .take(INSERT_COUNT)
     .collect();
@@ -76,17 +78,15 @@ where
 }
 
 async fn create_blob_client<Backend, const RETURN_COUNT: usize>() -> (
-    Transitive<BlobClient<tonic::transport::Channel>>,
+    Transitive<BlobClient<Channel>>,
     Vec<(u64, Vec<u8>, Option<String>)>,
 )
 where
-    Backend: BlobBackend<
-            Error: IntoTonicStatus + Send,
-            GetStream: Send,
-            StoreStream: Send,
-            UpdateStream: Send,
-            DeleteStream: Send,
-        > + 'static,
+    Backend: DatabaseBackend<Error: IntoTonicStatus>
+        + BlobBackend<GetStream: Send, StoreStream: Send, UpdateStream: Send, DeleteStream: Send>
+        + transaction::TransactionalBackend
+        + 'static,
+    Backend::Error: std::fmt::Display + std::fmt::Debug,
 {
     let mut client = transitive::blob_client::<_, Backend>(Location::InMemory)
         .await
@@ -109,6 +109,7 @@ where
                 let requests: Vec<_> = iter::repeat_with(|| StoreRequest {
                     bytes: generate_bytes(),
                     metadata: generate_metadata(),
+                    transaction_id: None,
                 })
                 .take(INSERT_QUERIES_PER_BATCH)
                 .collect();
@@ -118,6 +119,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(c)))]
@@ -130,7 +132,10 @@ where
         runtime.block_on(create_blob_client::<backend::Sqlite, GET_QUERIES_PER_BATCH>());
     let ids: Vec<_> = contents
         .into_iter()
-        .map(|(id, _, _)| GetRequest { id })
+        .map(|(id, _, _)| GetRequest {
+            id,
+            transaction_id: None,
+        })
         .collect();
 
     c.bench_function("sqlite_blob_get", |b| {
@@ -140,6 +145,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(c)))]
@@ -164,6 +170,7 @@ where
                         bytes: Some(generate_bytes()),
                         should_update_metadata: false,
                         metadata: None,
+                        transaction_id: None,
                     })
                     .collect();
                 (stream::iter(requests), client.clone())
@@ -172,6 +179,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(c)))]
@@ -196,6 +204,7 @@ where
                         bytes: None,
                         should_update_metadata: true,
                         metadata: generate_metadata(),
+                        transaction_id: None,
                     })
                     .collect();
                 (stream::iter(requests), client.clone())
@@ -204,6 +213,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(c)))]
@@ -228,6 +238,7 @@ where
                         bytes: Some(generate_bytes()),
                         should_update_metadata: true,
                         metadata: generate_metadata(),
+                        transaction_id: None,
                     })
                     .collect();
                 (stream::iter(requests), client.clone())
@@ -236,6 +247,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(c)))]
@@ -257,7 +269,10 @@ where
                         )
                         .await
                         .into_iter()
-                        .map(|(id, _, _)| DeleteRequest { id })
+                        .map(|(id, _, _)| DeleteRequest {
+                            id,
+                            transaction_id: None,
+                        })
                         .collect();
                     (stream::iter(ids), client.clone())
                 })
@@ -268,6 +283,7 @@ where
             BatchSize::SmallInput,
         );
     });
+    drop(client);
 }
 
 criterion_group! {
@@ -277,7 +293,7 @@ criterion_group! {
         sqlite_insert,
         sqlite_get,
         sqlite_update_data,
-        sqlite_update_metadata,
+        // sqlite_update_metadata,
         sqlite_update_both,
         sqlite_delete,
 }

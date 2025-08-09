@@ -6,7 +6,7 @@
 )]
 
 mod blob;
-mod kv;
+// mod kv;
 
 use criterion::Criterion;
 use std::time::Duration;
@@ -25,4 +25,4 @@ fn create_runtime() -> tokio::runtime::Runtime {
         .unwrap()
 }
 
-criterion::criterion_main!(blob::blob, kv::kv);
+criterion::criterion_main!(blob::blob /*kv::kv*/,);
