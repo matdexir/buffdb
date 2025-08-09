@@ -4,7 +4,7 @@
 [![Tests](https://github.com/buffdb/buffdb/actions/workflows/test.yml/badge.svg)](https://github.com/buffdb/buffdb/actions/workflows/test.yml)
 [![Crates.io](https://img.shields.io/crates/v/buffdb.svg)](https://crates.io/crates/buffdb)
 
-BuffDB is a lightweight, high-performance embedded database with networking capabilities, designed for edge computing and offline-first applications. Built in Rust with <2MB binary size.
+BuffDB is a lightweight, high-performance embedded database for model storage with networking capabilities, designed for edge computing and offline-first applications. Built in Rust with <2MB binary size.
 
 **⚠️ Experimental:** This project is rapidly evolving. If you are trying it out and hit a roadblock, please open an [issue](https://github.com/buffdb/buffdb/issues).
 
