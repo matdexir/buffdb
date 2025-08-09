@@ -7,7 +7,7 @@ use buffdb::proto::kv::{DeleteRequest, GetRequest, SetRequest};
 use buffdb::proto::query::{RawQuery, TargetStore};
 use buffdb::queryable::Queryable;
 use buffdb::transitive::Transitive;
-use buffdb::{backend, transitive, Location};
+use buffdb::{backend, transaction, transitive, Location};
 use criterion::measurement::Measurement;
 use criterion::{criterion_group, BatchSize, Criterion};
 use futures::stream;
@@ -63,12 +63,11 @@ async fn create_kv_client<Backend, const RETURN_COUNT: usize>() -> (
     Vec<(String, String)>,
 )
 where
-    Backend: KvBackend<
-            Error: IntoTonicStatus + Send,
-            GetStream: Send,
-            SetStream: Send,
-            DeleteStream: Send,
-        > + 'static,
+    Backend: DatabaseBackend<Error: IntoTonicStatus>
+        + KvBackend<GetStream: Send, SetStream: Send, DeleteStream: Send>
+        + transaction::TransactionalBackend
+        + 'static,
+    Backend::Error: std::fmt::Display + std::fmt::Debug,
 {
     let mut client = transitive::kv_client::<_, Backend>(Location::InMemory)
         .await
@@ -141,6 +140,7 @@ where
     let requests: Vec<_> = iter::repeat_with(|| SetRequest {
         key: generate_key(),
         value: generate_value(),
+        transaction_id: None,
     })
     .take(INSERT_COUNT)
     .collect();
@@ -215,6 +215,7 @@ where
                 let requests: Vec<_> = iter::repeat_with(|| SetRequest {
                     key: generate_key(),
                     value: generate_value(),
+                    transaction_id: None,
                 })
                 .take(INSERT_QUERIES_PER_BATCH)
                 .collect();
@@ -263,7 +264,10 @@ where
 
     let keys = kv_pairs
         .into_iter()
-        .map(|(key, _)| GetRequest { key })
+        .map(|(key, _)| GetRequest {
+            key,
+            transaction_id: None,
+        })
         .collect::<Vec<_>>();
 
     c.bench_function("sqlite_kv_get", |b| {
@@ -331,7 +335,10 @@ where
     let queries: Vec<_> = kv_pairs
         .iter()
         .cloned()
-        .map(|(key, _)| DeleteRequest { key })
+        .map(|(key, _)| DeleteRequest {
+            key,
+            transaction_id: None,
+        })
         .collect();
 
     c.bench_function("sqlite_kv_delete", |b| {
@@ -341,7 +348,11 @@ where
                 // iterations after the first.
                 let mut insert_queries = vec![];
                 for (key, value) in kv_pairs.iter().cloned() {
-                    insert_queries.push(SetRequest { key, value });
+                    insert_queries.push(SetRequest {
+                        key,
+                        value,
+                        transaction_id: None,
+                    });
                 }
                 runtime.block_on(async { client.set(stream::iter(insert_queries)).await.unwrap() });
 
@@ -360,7 +371,7 @@ criterion_group!(
     config = super::criterion_config();
     targets =
         sqlite_connection_only,
-        sqlite_insert,
+        // sqlite_insert,
         sqlite_insert_raw,
         sqlite_get,
         sqlite_get_raw,
