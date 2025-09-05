@@ -172,7 +172,7 @@ impl SecondaryIndex {
                     if !existing_keys.is_empty() && !existing_keys.contains(&key.to_string()) {
                         return Err(IndexError::UniqueConstraintViolation {
                             index: self.config.name.clone(),
-                            value: format!("{:?}", composite_key),
+                            value: format!("{composite_key:?}"),
                         });
                     }
                 }
@@ -181,6 +181,7 @@ impl SecondaryIndex {
                 .entry(composite_key)
                 .or_default()
                 .insert(key.to_string());
+            drop(index);
             Ok(())
         } else {
             Err(IndexError::UnsupportedIndexType)
@@ -237,6 +238,7 @@ impl SecondaryIndex {
                 let _ = keys.remove(key);
                 if keys.is_empty() {
                     drop(index.remove(&composite_key));
+                    drop(index);
                 }
             }
             Ok(())
